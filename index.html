@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bronx Children’s Museum - Baseball Blast</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="stageWrap">
+    <video id="video" playsinline autoplay muted></video>
+    <canvas id="canvas"></canvas>
+
+    <div class="overlay topBar">
+      <div class="brandChip">
+        <img src="./BxCM_Logo_FullColor_dark-backgrounds.png" alt="Bronx Children's Museum logo" class="brandLogo" />
+      </div>
+
+      <div class="titleChip">
+        <div class="titleMain">BASEBALL BLAST</div>
+        <div class="titleSub">Swing big. Make contact. Chase the high score.</div>
+      </div>
+
+      <div class="scoreChip">
+        <div class="scoreLine"><span>Score</span><strong id="scoreEl">0</strong></div>
+        <div class="scoreLine"><span>Pitches</span><strong id="pitchesEl">10</strong></div>
+      </div>
+    </div>
+
+    <div class="overlay leftHud">
+      <div class="hudCard hudYellow">
+        <div class="hudLabel">Hits</div>
+        <div class="hudValue" id="hitsEl">0</div>
+      </div>
+      <div class="hudCard hudPurple">
+        <div class="hudLabel">Misses</div>
+        <div class="hudValue" id="missesEl">0</div>
+      </div>
+      <div class="hudCard hudBlue">
+        <div class="hudLabel">Best EV</div>
+        <div class="hudValue" id="veloEl">0</div>
+      </div>
+    </div>
+
+    <div class="overlay rightPanel">
+      <div class="panelCard">
+        <div class="panelTitle">Controls</div>
+
+        <button id="startBtn">Start Game</button>
+        <button id="pauseBtn" class="secondary">Pause Game</button>
+        <button id="resetBtn" class="secondary">Reset Game</button>
+        <button id="muteBtn" class="secondary blueBtn">Sound: On</button>
+
+        <div class="controlGroup">
+          <div class="controlLabel">Batting Side</div>
+          <div class="sideToggle">
+            <button id="rightHandBtn" class="sideBtn active">Right</button>
+            <button id="leftHandBtn" class="sideBtn">Left</button>
+          </div>
+        </div>
+
+        <div class="sliderWrap">
+          <label for="pitchSpeed">Pitch Speed <span id="pitchSpeedVal">10.5</span></label>
+          <input id="pitchSpeed" type="range" min="7" max="15" value="10.5" step="0.5" />
+        </div>
+
+        <div class="sliderWrap">
+          <label for="swingThreshold">Swing Threshold <span id="swingThresholdVal">420</span></label>
+          <input id="swingThreshold" type="range" min="250" max="700" value="420" step="10" />
+        </div>
+
+        <div class="sliderWrap">
+          <label for="pitchDelay">Reset Between Pitches <span id="pitchDelayVal">1.5s</span></label>
+          <input id="pitchDelay" type="range" min="1.0" max="3.5" value="1.5" step="0.1" />
+        </div>
+
+        <div class="tiny">
+          Swing threshold = how fast your bat hand has to move before the game counts it as a real swing. Lower = easier.
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay miniMapWrap">
+      <div class="miniMapCard">
+        <div class="miniMapTitle">Ball Path</div>
+        <canvas id="miniMapCanvas" width="240" height="150"></canvas>
+      </div>
+    </div>
+
+    <div class="overlay bottomBar">
+      <div class="instructionChip" id="instructionChip">
+        Big upward swings can turn doubles into triples. Home runs trigger a giant celebration.
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+  <script src="./game.js"></script>
+</body>
+</html>

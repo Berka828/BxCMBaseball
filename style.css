@@ -1,0 +1,353 @@
+:root {
+  --panel: rgba(10, 22, 44, 0.82);
+  --line: rgba(255,255,255,0.22);
+  --shadow: 0 14px 34px rgba(0,0,0,0.28);
+  --yellow: #ffd54f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #081a33;
+  font-family: "Nunito", Arial, sans-serif;
+}
+
+body {
+  position: fixed;
+  inset: 0;
+}
+
+.stageWrap {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #081a33;
+}
+
+video,
+canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+video {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.overlay {
+  position: absolute;
+  z-index: 20;
+}
+
+.topBar {
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  display: grid;
+  grid-template-columns: 230px 1fr 180px;
+  gap: 14px;
+  align-items: stretch;
+}
+
+.leftHud {
+  top: 106px;
+  left: 16px;
+  width: 126px;
+  display: grid;
+  gap: 10px;
+}
+
+.rightPanel {
+  top: 106px;
+  right: 16px;
+  width: 290px;
+}
+
+/* moved up to middle-left */
+.miniMapWrap {
+  left: 16px;
+  top: 460px;
+  width: 264px;
+}
+
+.bottomBar {
+  left: 160px;
+  right: 310px;
+  bottom: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.brandChip,
+.titleChip,
+.scoreChip,
+.hudCard,
+.panelCard,
+.instructionChip,
+.miniMapCard {
+  background: var(--panel);
+  border: 2px solid var(--line);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+  border-radius: 22px;
+}
+
+.brandChip {
+  min-height: 78px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brandLogo {
+  width: 100%;
+  max-width: 210px;
+  height: auto;
+  display: block;
+}
+
+.titleChip {
+  min-height: 78px;
+  padding: 10px 20px;
+  text-align: center;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.titleMain {
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-size: 38px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--yellow);
+  text-shadow: 0 4px 0 rgba(0,0,0,0.22);
+}
+
+.titleSub {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #e3f0ff;
+}
+
+.scoreChip {
+  min-height: 78px;
+  padding: 10px 14px;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.scoreLine {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.scoreLine + .scoreLine {
+  margin-top: 8px;
+}
+
+.scoreLine strong {
+  font-size: 28px;
+  color: var(--yellow);
+  font-family: "Baloo 2", system-ui, sans-serif;
+  line-height: 1;
+}
+
+.hudCard {
+  padding: 10px;
+  color: white;
+  text-align: center;
+}
+
+.hudLabel {
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #d4e6ff;
+}
+
+.hudValue {
+  margin-top: 4px;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 900;
+  font-family: "Baloo 2", system-ui, sans-serif;
+  color: white;
+}
+
+.panelCard {
+  padding: 14px;
+  color: white;
+}
+
+.panelTitle,
+.miniMapTitle {
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 800;
+  color: var(--yellow);
+  margin-bottom: 10px;
+}
+
+button,
+input[type="range"] {
+  width: 100%;
+}
+
+button {
+  border: none;
+  border-radius: 16px;
+  padding: 12px 14px;
+  font-size: 17px;
+  font-weight: 900;
+  font-family: "Baloo 2", system-ui, sans-serif;
+  cursor: pointer;
+  color: white;
+  background: linear-gradient(180deg, #ff9d76, #ff7043);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.18);
+  margin-bottom: 8px;
+}
+
+button.secondary {
+  background: linear-gradient(180deg, #5a6d85, #405164);
+}
+
+button.blueBtn {
+  background: linear-gradient(180deg, #5ab8ff, #2f8ef5);
+}
+
+.controlGroup {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.controlLabel {
+  font-size: 14px;
+  font-weight: 900;
+  color: #e8f3ff;
+  margin-bottom: 6px;
+}
+
+.sideToggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.sideBtn {
+  margin-bottom: 0;
+  background: linear-gradient(180deg, #5a6d85, #405164);
+}
+
+.sideBtn.active {
+  background: linear-gradient(180deg, #ffcf68, #ffb300);
+  color: #17324d;
+}
+
+.sliderWrap {
+  margin-top: 10px;
+}
+
+.sliderWrap label {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  color: #e8f3ff;
+}
+
+input[type="range"] {
+  accent-color: var(--yellow);
+}
+
+.tiny {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 700;
+  color: #dbeaff;
+}
+
+.instructionChip {
+  padding: 12px 18px;
+  color: white;
+  font-weight: 900;
+  text-align: center;
+  width: 100%;
+  max-width: 760px;
+  font-size: 14px;
+}
+
+.miniMapCard {
+  padding: 10px;
+  width: 264px;
+}
+
+#miniMapCanvas {
+  width: 240px;
+  height: 150px;
+  display: block;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.05);
+}
+
+@media (max-width: 1280px) {
+  .topBar {
+    grid-template-columns: 180px 1fr 160px;
+  }
+
+  .leftHud {
+    width: 112px;
+  }
+
+  .rightPanel {
+    width: 270px;
+  }
+
+  .bottomBar {
+    left: 140px;
+    right: 286px;
+  }
+
+  .miniMapWrap {
+    width: 236px;
+  }
+
+  .miniMapCard {
+    width: 236px;
+  }
+
+  #miniMapCanvas {
+    width: 212px;
+    height: 132px;
+  }
+}
+
+@media (max-height: 820px) {
+  .miniMapWrap {
+    top: 400px;
+  }
+}
