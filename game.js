@@ -352,63 +352,62 @@ function drawWindowScene(yTop, yBottom) {
   const pad = canvas.width * 0.008;
   const usableW = canvas.width - pad * 2;
   const colW = usableW / cols;
+  const sceneH = yBottom - yTop;
 
-  const coloredPanels = [
-    { color: "rgba(255,210,50,0.35)", x: 0.12, w: 0.14 },
-    { color: "rgba(245,140,50,0.35)", x: 0.28, w: 0.16 },
-    { color: "rgba(50,180,240,0.35)", x: 0.50, w: 0.16 },
-    { color: "rgba(210,80,200,0.35)", x: 0.68, w: 0.12 },
-    { color: "rgba(90,200,90,0.35)", x: 0.86, w: 0.14 }
+  const letters = [
+    { ch: "B", color: "rgba(255,210,50,0.32)", x: 0.11 },
+    { ch: "R", color: "rgba(245,140,50,0.32)", x: 0.29 },
+    { ch: "O", color: "rgba(50,180,240,0.32)", x: 0.50 },
+    { ch: "N", color: "rgba(210,80,200,0.32)", x: 0.70 },
+    { ch: "X", color: "rgba(90,200,90,0.32)", x: 0.88 }
   ];
 
-  // big soft color blocks behind windows, inspired by the attached image
-  for (const p of coloredPanels) {
-    const drift = (bgTick * 0.10) % 18;
-    const lx = canvas.width * p.x - drift;
-    const ly = yTop + (yBottom - yTop) * 0.04;
-    const lw = canvas.width * p.w;
-    const lh = (yBottom - yTop) * 0.92;
-    ctx.fillStyle = p.color;
-    drawRoundedRectPath(lx - lw * 0.5, ly, lw, lh, 24);
-    ctx.fill();
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `900 ${Math.max(120, canvas.width * 0.16)}px "Baloo 2", sans-serif`;
+
+  for (const l of letters) {
+    const drift = Math.sin(bgTick * 0.01 + l.x * 4) * 6;
+    ctx.fillStyle = l.color;
+    ctx.fillText(l.ch, canvas.width * l.x + drift, yTop + sceneH * 0.54);
   }
+  ctx.restore();
 
   for (let i = 0; i < cols; i++) {
     const x = pad + i * colW;
 
     ctx.fillStyle = "#51637a";
-    ctx.fillRect(x, yTop, colW - 6, yBottom - yTop);
+    ctx.fillRect(x, yTop, colW - 6, sceneH);
 
     const innerPad = 6;
     const ix = x + innerPad;
     const iy = yTop + innerPad;
     const iw = colW - 6 - innerPad * 2;
-    const ih = yBottom - yTop - innerPad * 2;
+    const ih = sceneH - innerPad * 2;
 
     const winGrad = ctx.createLinearGradient(0, iy, 0, iy + ih);
-    winGrad.addColorStop(0, "#eef7ff");
-    winGrad.addColorStop(1, "#d8e7f0");
+    winGrad.addColorStop(0, "rgba(238,247,255,0.86)");
+    winGrad.addColorStop(1, "rgba(216,231,240,0.78)");
     ctx.fillStyle = winGrad;
     ctx.fillRect(ix, iy, iw, ih);
 
-    // reflections
-    ctx.strokeStyle = "rgba(255,255,255,0.20)";
-    ctx.lineWidth = 8;
-    ctx.beginPath();
-    ctx.moveTo(ix + iw * 0.15, iy);
-    ctx.lineTo(ix + iw * 0.45, iy + ih);
-    ctx.stroke();
-
-    // skyline silhouettes
-    ctx.fillStyle = "rgba(90,102,120,0.28)";
+    ctx.fillStyle = "rgba(90,102,120,0.22)";
     const baseY = iy + ih;
     const drift = (bgTick * 0.12) % (iw * 0.4);
     for (let b = -1; b < 5; b++) {
       const bx = ix + b * (iw / 4) - drift;
       const bw = iw / 6;
-      const bh = ih * (0.25 + ((b + i + 6) % 3) * 0.12);
+      const bh = ih * (0.22 + ((b + i + 6) % 3) * 0.12);
       ctx.fillRect(bx, baseY - bh, bw, bh);
     }
+
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.moveTo(ix + iw * 0.18, iy);
+    ctx.lineTo(ix + iw * 0.46, iy + ih);
+    ctx.stroke();
 
     ctx.strokeStyle = "rgba(90,110,130,0.55)";
     ctx.lineWidth = 2;
@@ -426,15 +425,15 @@ function drawWindowScene(yTop, yBottom) {
 
 function drawFenceWall(yTop) {
   const fenceY = yTop;
-  const wallY = yTop + canvas.height * 0.08;
-  const wallH = canvas.height * 0.12;
+  const wallY = yTop + canvas.height * 0.07;
+  const wallH = canvas.height * 0.11;
 
-  // fence
   ctx.strokeStyle = "#5f6c7d";
   ctx.lineWidth = 2;
   const fenceDrift = (bgTick * 0.08) % 18;
   for (let x = -20; x < canvas.width + 20; x += 18) {
     const xx = x - fenceDrift;
+
     ctx.beginPath();
     ctx.moveTo(xx, fenceY);
     ctx.lineTo(xx + 20, wallY);
@@ -455,20 +454,19 @@ function drawFenceWall(yTop) {
     ctx.stroke();
   }
 
-  // wall
   const wallGrad = ctx.createLinearGradient(0, wallY, 0, wallY + wallH);
   wallGrad.addColorStop(0, "#304d8a");
   wallGrad.addColorStop(1, "#223b71");
   ctx.fillStyle = wallGrad;
   ctx.fillRect(0, wallY, canvas.width, wallH);
 
-  // alternating NY / Players Alliance
   const sections = 10;
   const sectionW = canvas.width / sections;
+
   for (let i = 0; i < sections; i++) {
     const x = i * sectionW;
     const cx = x + sectionW / 2;
-    const cy = wallY + wallH * 0.54;
+    const cy = wallY + wallH * 0.56;
 
     if (i % 2 === 0) {
       ctx.fillStyle = "rgba(255,255,255,0.95)";
@@ -508,7 +506,7 @@ function drawFenceWall(yTop) {
 }
 
 function drawIndoorField() {
-  const fieldTop = canvas.height * 0.60;
+  const fieldTop = canvas.height * 0.68;
 
   const turfGrad = ctx.createLinearGradient(0, fieldTop, 0, canvas.height);
   turfGrad.addColorStop(0, "#65b84f");
@@ -523,48 +521,35 @@ function drawIndoorField() {
     ctx.fillRect(stripeShift, fieldTop + i * stripeH, canvas.width, stripeH);
   }
 
-  ctx.strokeStyle = "rgba(255,255,255,0.55)";
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(canvas.width * 0.10, canvas.height * 0.83);
-  ctx.lineTo(canvas.width * 0.60, canvas.height * 0.66);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.moveTo(canvas.width * 0.38, canvas.height * 0.84);
-  ctx.lineTo(canvas.width * 0.94, canvas.height * 0.66);
-  ctx.stroke();
-
-  // batter area left
   ctx.fillStyle = "#c97342";
   ctx.beginPath();
-  ctx.moveTo(canvas.width * 0.00, canvas.height * 0.78);
-  ctx.lineTo(canvas.width * 0.18, canvas.height * 0.76);
-  ctx.lineTo(canvas.width * 0.28, canvas.height * 0.92);
-  ctx.lineTo(canvas.width * 0.00, canvas.height * 0.97);
+  ctx.moveTo(canvas.width * 0.00, canvas.height * 0.80);
+  ctx.lineTo(canvas.width * 0.18, canvas.height * 0.78);
+  ctx.lineTo(canvas.width * 0.28, canvas.height * 0.93);
+  ctx.lineTo(canvas.width * 0.00, canvas.height * 0.98);
   ctx.closePath();
   ctx.fill();
 
   ctx.strokeStyle = "#ffffff";
   ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.moveTo(canvas.width * 0.05, canvas.height * 0.86);
-  ctx.lineTo(canvas.width * 0.17, canvas.height * 0.86);
-  ctx.lineTo(canvas.width * 0.26, canvas.height * 0.97);
-  ctx.lineTo(canvas.width * 0.14, canvas.height * 0.97);
+  ctx.moveTo(canvas.width * 0.05, canvas.height * 0.87);
+  ctx.lineTo(canvas.width * 0.17, canvas.height * 0.87);
+  ctx.lineTo(canvas.width * 0.26, canvas.height * 0.98);
+  ctx.lineTo(canvas.width * 0.14, canvas.height * 0.98);
   ctx.closePath();
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(canvas.width * 0.07, canvas.height * 0.82);
-  ctx.lineTo(canvas.width * 0.19, canvas.height * 0.82);
-  ctx.lineTo(canvas.width * 0.28, canvas.height * 0.93);
-  ctx.lineTo(canvas.width * 0.16, canvas.height * 0.93);
+  ctx.moveTo(canvas.width * 0.07, canvas.height * 0.83);
+  ctx.lineTo(canvas.width * 0.19, canvas.height * 0.83);
+  ctx.lineTo(canvas.width * 0.28, canvas.height * 0.94);
+  ctx.lineTo(canvas.width * 0.16, canvas.height * 0.94);
   ctx.closePath();
   ctx.stroke();
 
   const px = canvas.width * 0.12;
-  const py = canvas.height * 0.87;
+  const py = canvas.height * 0.89;
   ctx.fillStyle = "#ffffff";
   ctx.beginPath();
   ctx.moveTo(px - 18, py);
@@ -575,30 +560,28 @@ function drawIndoorField() {
   ctx.closePath();
   ctx.fill();
 
-  // mound right
   ctx.fillStyle = "#c26b3d";
   ctx.beginPath();
-  ctx.ellipse(canvas.width * 0.78, canvas.height * 0.86, canvas.width * 0.12, canvas.height * 0.08, -0.08, 0, Math.PI * 2);
+  ctx.ellipse(
+    canvas.width * 0.78,
+    canvas.height * 0.88,
+    canvas.width * 0.12,
+    canvas.height * 0.08,
+    -0.08,
+    0,
+    Math.PI * 2
+  );
   ctx.fill();
 
   ctx.fillStyle = "#f1e9d8";
   ctx.beginPath();
-  ctx.moveTo(canvas.width * 0.83, canvas.height * 0.79);
-  ctx.lineTo(canvas.width * 0.85, canvas.height * 0.785);
-  ctx.lineTo(canvas.width * 0.86, canvas.height * 0.80);
-  ctx.lineTo(canvas.width * 0.84, canvas.height * 0.815);
-  ctx.lineTo(canvas.width * 0.825, canvas.height * 0.805);
+  ctx.moveTo(canvas.width * 0.83, canvas.height * 0.81);
+  ctx.lineTo(canvas.width * 0.85, canvas.height * 0.805);
+  ctx.lineTo(canvas.width * 0.86, canvas.height * 0.82);
+  ctx.lineTo(canvas.width * 0.84, canvas.height * 0.835);
+  ctx.lineTo(canvas.width * 0.825, canvas.height * 0.825);
   ctx.closePath();
   ctx.fill();
-
-  ctx.save();
-  ctx.translate(canvas.width * 0.52, canvas.height * 0.70);
-  ctx.rotate(-0.03);
-  ctx.textAlign = "center";
-  ctx.fillStyle = "rgba(255,255,255,0.65)";
-  ctx.font = `900 ${Math.max(18, canvas.width * 0.022)}px "Baloo 2", sans-serif`;
-  ctx.fillText("HOME RUN ZONE", 0, 0);
-  ctx.restore();
 }
 
 function drawBackground() {
@@ -612,7 +595,7 @@ function drawBackground() {
 
   drawRoofAndLights();
   drawWindowScene(canvas.height * 0.16, canvas.height * 0.55);
-  drawFenceWall(canvas.height * 0.48);
+  drawFenceWall(canvas.height * 0.50);
   drawIndoorField();
 
   const haze = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -878,7 +861,7 @@ function updateBatVelocity(point) {
   prevBatPoint = { ...point, t: now };
 }
 
-// ---------- BALL / HIT ----------
+// ---------- BALL ----------
 function createPitch() {
   if (pitchesLeft <= 0) return;
   if (gameState !== "playing") return;
