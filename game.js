@@ -78,6 +78,17 @@ const SKELETON_SCALE = 0.68;
 const SKELETON_OFFSET_Y = 100;
 const SKELETON_OFFSET_X = 0;
 
+// ---------- IMAGE ASSETS ----------
+const yankeesLogoImg = new Image();
+let yankeesLogoReady = false;
+yankeesLogoImg.onload = () => {
+  yankeesLogoReady = true;
+};
+yankeesLogoImg.onerror = () => {
+  yankeesLogoReady = false;
+};
+yankeesLogoImg.src = "yankees-logo.png";
+
 // ---------- AUDIO ----------
 let audioCtx = null;
 let soundEnabled = true;
@@ -347,6 +358,32 @@ function drawRoofAndLights() {
   drawLightBank(canvas.width * 0.70, canvas.height * 0.02);
 }
 
+function drawColorfulBronxBranding(yTop, sceneH) {
+  const letters = [
+    { ch: "B", color: "rgba(255,210,50,0.48)", x: 0.12 },
+    { ch: "R", color: "rgba(245,140,50,0.48)", x: 0.30 },
+    { ch: "O", color: "rgba(50,180,240,0.48)", x: 0.50 },
+    { ch: "N", color: "rgba(210,80,200,0.48)", x: 0.70 },
+    { ch: "X", color: "rgba(90,200,90,0.48)", x: 0.88 }
+  ];
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `900 ${Math.max(130, canvas.width * 0.17)}px "Baloo 2", sans-serif`;
+
+  for (const l of letters) {
+    const drift = Math.sin(bgTick * 0.01 + l.x * 4) * 5;
+    ctx.fillStyle = l.color;
+    ctx.fillText(l.ch, canvas.width * l.x + drift, yTop + sceneH * 0.42);
+  }
+
+  ctx.fillStyle = "rgba(74, 43, 143, 0.42)";
+  ctx.font = `900 ${Math.max(26, canvas.width * 0.026)}px "Nunito", sans-serif`;
+  ctx.fillText("CHILDREN'S MUSEUM", canvas.width * 0.5, yTop + sceneH * 0.76);
+  ctx.restore();
+}
+
 function drawWindowScene(yTop, yBottom) {
   const cols = 11;
   const pad = canvas.width * 0.008;
@@ -354,35 +391,13 @@ function drawWindowScene(yTop, yBottom) {
   const colW = usableW / cols;
   const sceneH = yBottom - yTop;
 
-  // large colorful BxCM-inspired window branding
-  const letters = [
-    { ch: "B", color: "rgba(255,210,50,0.28)", x: 0.12 },
-    { ch: "R", color: "rgba(245,140,50,0.28)", x: 0.29 },
-    { ch: "O", color: "rgba(50,180,240,0.28)", x: 0.50 },
-    { ch: "N", color: "rgba(210,80,200,0.28)", x: 0.70 },
-    { ch: "X", color: "rgba(90,200,90,0.28)", x: 0.88 }
-  ];
-
-  ctx.save();
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = `900 ${Math.max(120, canvas.width * 0.16)}px "Baloo 2", sans-serif`;
-
-  for (const l of letters) {
-    const drift = Math.sin(bgTick * 0.01 + l.x * 4) * 6;
-    ctx.fillStyle = l.color;
-    ctx.fillText(l.ch, canvas.width * l.x + drift, yTop + sceneH * 0.45);
-  }
-
-  // add museum wording across windows
-  ctx.fillStyle = "rgba(70, 40, 140, 0.22)";
-  ctx.font = `900 ${Math.max(26, canvas.width * 0.028)}px "Nunito", sans-serif`;
-  ctx.fillText("CHILDREN'S MUSEUM", canvas.width * 0.5, yTop + sceneH * 0.72);
-  ctx.restore();
+  // draw the colorful BRONX branding FIRST and then lay translucent windows on top
+  drawColorfulBronxBranding(yTop, sceneH);
 
   for (let i = 0; i < cols; i++) {
     const x = pad + i * colW;
 
+    // outer frame
     ctx.fillStyle = "#51637a";
     ctx.fillRect(x, yTop, colW - 6, sceneH);
 
@@ -392,13 +407,15 @@ function drawWindowScene(yTop, yBottom) {
     const iw = colW - 6 - innerPad * 2;
     const ih = sceneH - innerPad * 2;
 
+    // more transparent glass so the BRONX branding actually shows through
     const winGrad = ctx.createLinearGradient(0, iy, 0, iy + ih);
-    winGrad.addColorStop(0, "rgba(238,247,255,0.80)");
-    winGrad.addColorStop(1, "rgba(216,231,240,0.72)");
+    winGrad.addColorStop(0, "rgba(238,247,255,0.48)");
+    winGrad.addColorStop(1, "rgba(216,231,240,0.36)");
     ctx.fillStyle = winGrad;
     ctx.fillRect(ix, iy, iw, ih);
 
-    ctx.fillStyle = "rgba(90,102,120,0.20)";
+    // skyline silhouettes
+    ctx.fillStyle = "rgba(90,102,120,0.18)";
     const baseY = iy + ih;
     const drift = (bgTick * 0.12) % (iw * 0.4);
     for (let b = -1; b < 5; b++) {
@@ -408,14 +425,16 @@ function drawWindowScene(yTop, yBottom) {
       ctx.fillRect(bx, baseY - bh, bw, bh);
     }
 
-    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    // reflections
+    ctx.strokeStyle = "rgba(255,255,255,0.14)";
     ctx.lineWidth = 7;
     ctx.beginPath();
     ctx.moveTo(ix + iw * 0.18, iy);
     ctx.lineTo(ix + iw * 0.46, iy + ih);
     ctx.stroke();
 
-    ctx.strokeStyle = "rgba(90,110,130,0.55)";
+    // mullions
+    ctx.strokeStyle = "rgba(90,110,130,0.65)";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(ix + iw * 0.5, iy);
@@ -427,6 +446,20 @@ function drawWindowScene(yTop, yBottom) {
     ctx.lineTo(ix + iw, iy + ih * 0.52);
     ctx.stroke();
   }
+}
+
+function drawYankeesLogo(x, y, w, h) {
+  if (yankeesLogoReady) {
+    ctx.drawImage(yankeesLogoImg, x, y, w, h);
+    return;
+  }
+
+  // fallback
+  ctx.fillStyle = "rgba(255,255,255,0.95)";
+  ctx.font = `900 ${Math.max(18, w * 0.55)}px serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("NY", x + w / 2, y + h / 2);
 }
 
 function drawFenceWall(yTop) {
@@ -475,10 +508,9 @@ function drawFenceWall(yTop) {
     const cy = wallY + wallH * 0.56;
 
     if (i % 2 === 0) {
-      ctx.fillStyle = "rgba(255,255,255,0.95)";
-      ctx.font = `900 ${Math.max(18, canvas.width * 0.018)}px serif`;
-      ctx.textAlign = "center";
-      ctx.fillText("NY", cx, cy);
+      const logoW = Math.min(sectionW * 0.46, 54);
+      const logoH = logoW;
+      drawYankeesLogo(cx - logoW / 2, cy - logoH / 2, logoW, logoH);
     } else {
       const barW = Math.max(18, canvas.width * 0.010);
       const barH = 4;
@@ -495,6 +527,7 @@ function drawFenceWall(yTop) {
       ctx.fillStyle = "#ffffff";
       ctx.font = `700 ${Math.max(10, canvas.width * 0.010)}px sans-serif`;
       ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
       ctx.fillText("PLAYERS", cx - 18, cy - 4);
       ctx.fillText("ALLIANCE", cx - 18, cy + 10);
     }
