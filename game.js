@@ -236,269 +236,384 @@ async function loadModel() {
   );
 }
 
-// ---------- CODE-DRAWN BRONX BACKGROUND ----------
-function drawCloud(x, y, s, alpha = 0.9) {
-  ctx.save();
-  ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+// ---------- CODE-DRAWN INDOOR STADIUM BACKGROUND ----------
+function drawRoundedRectPath(x, y, w, h, r) {
   ctx.beginPath();
-  ctx.arc(x, y, 22 * s, 0, Math.PI * 2);
-  ctx.arc(x + 24 * s, y - 10 * s, 18 * s, 0, Math.PI * 2);
-  ctx.arc(x + 50 * s, y, 26 * s, 0, Math.PI * 2);
-  ctx.arc(x + 78 * s, y - 6 * s, 20 * s, 0, Math.PI * 2);
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawCloudSoft(x, y, s) {
+  ctx.save();
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.beginPath();
+  ctx.arc(x, y, 18 * s, 0, Math.PI * 2);
+  ctx.arc(x + 22 * s, y - 8 * s, 14 * s, 0, Math.PI * 2);
+  ctx.arc(x + 42 * s, y, 18 * s, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
 
-function drawBuilding(x, groundY, w, h, color, windowColor, roofType = 0) {
-  ctx.save();
-  ctx.fillStyle = color;
-  ctx.fillRect(x, groundY - h, w, h);
+function drawInteriorWindows(yTop, yBottom) {
+  const cols = 11;
+  const pad = canvas.width * 0.008;
+  const usableW = canvas.width - pad * 2;
+  const colW = usableW / cols;
 
-  if (roofType === 1) {
+  for (let i = 0; i < cols; i++) {
+    const x = pad + i * colW;
+
+    ctx.fillStyle = "#51637a";
+    ctx.fillRect(x, yTop, colW - 6, yBottom - yTop);
+
+    const innerPad = 6;
+    const ix = x + innerPad;
+    const iy = yTop + innerPad;
+    const iw = colW - 6 - innerPad * 2;
+    const ih = yBottom - yTop - innerPad * 2;
+
+    const winGrad = ctx.createLinearGradient(0, iy, 0, iy + ih);
+    winGrad.addColorStop(0, "#eef7ff");
+    winGrad.addColorStop(1, "#d8e7f0");
+    ctx.fillStyle = winGrad;
+    ctx.fillRect(ix, iy, iw, ih);
+
+    ctx.strokeStyle = "rgba(90,110,130,0.55)";
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(x, groundY - h);
-    ctx.lineTo(x + w * 0.5, groundY - h - 18);
-    ctx.lineTo(x + w, groundY - h);
-    ctx.closePath();
-    ctx.fill();
-  }
+    ctx.moveTo(ix + iw * 0.5, iy);
+    ctx.lineTo(ix + iw * 0.5, iy + ih);
+    ctx.stroke();
 
-  if (roofType === 2) {
-    ctx.fillRect(x + w * 0.4, groundY - h - 18, w * 0.18, 18);
-  }
+    ctx.beginPath();
+    ctx.moveTo(ix, iy + ih * 0.52);
+    ctx.lineTo(ix + iw, iy + ih * 0.52);
+    ctx.stroke();
 
-  ctx.fillStyle = windowColor;
-  const cols = Math.max(2, Math.floor(w / 18));
-  const rows = Math.max(3, Math.floor(h / 22));
-  const padX = 6;
-  const padY = 8;
-  const ww = Math.max(3, (w - padX * 2) / cols - 4);
-  const wh = Math.max(4, (h - padY * 2) / rows - 6);
-
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      if ((r + c) % 3 === 0) continue;
-      const wx = x + padX + c * ((w - padX * 2) / cols);
-      const wy = groundY - h + padY + r * ((h - padY * 2) / rows);
-      ctx.fillRect(wx, wy, ww, wh);
+    // skyline silhouettes in window
+    ctx.fillStyle = "rgba(90,102,120,0.28)";
+    const baseY = iy + ih;
+    for (let b = 0; b < 4; b++) {
+      const bx = ix + b * (iw / 4) + 2;
+      const bw = iw / 6;
+      const bh = ih * (0.25 + ((b + i) % 3) * 0.12);
+      ctx.fillRect(bx, baseY - bh, bw, bh);
     }
   }
-  ctx.restore();
 }
 
-function drawBronxSkyline(horizonY) {
-  const buildings = [
-    [canvas.width * 0.06, 44, 120, "#b66a5a", "#ffd88d", 0],
-    [canvas.width * 0.10, 54, 165, "#a55252", "#ffd88d", 2],
-    [canvas.width * 0.15, 40, 132, "#d98b46", "#ffe49b", 0],
-    [canvas.width * 0.22, 34, 108, "#7aa7d8", "#d9f2ff", 2],
-    [canvas.width * 0.26, 26, 138, "#57a0d3", "#d9f2ff", 1],
-    [canvas.width * 0.67, 34, 118, "#6e8bc8", "#dff1ff", 2],
-    [canvas.width * 0.72, 30, 146, "#b07a5f", "#ffe09d", 1],
-    [canvas.width * 0.77, 42, 124, "#d9924b", "#ffe09d", 0],
-    [canvas.width * 0.83, 36, 110, "#8d92b8", "#eef6ff", 2],
-    [canvas.width * 0.88, 30, 100, "#6f7ca0", "#eef6ff", 0]
-  ];
+function drawRoofAndLights() {
+  const roofGrad = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.18);
+  roofGrad.addColorStop(0, "#22324a");
+  roofGrad.addColorStop(1, "#36475f");
+  ctx.fillStyle = roofGrad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height * 0.16);
 
-  for (const [x, w, h, c, wc, roof] of buildings) {
-    drawBuilding(x, horizonY, w, h, c, wc, roof);
-  }
-}
-
-function drawTreesLine(y) {
-  ctx.save();
-  for (let i = 0; i < 11; i++) {
-    const x = (canvas.width * 0.08) + i * (canvas.width * 0.08);
-    const s = 0.8 + (i % 3) * 0.12;
-    ctx.fillStyle = "#2f7d39";
-    ctx.beginPath();
-    ctx.arc(x, y, 22 * s, 0, Math.PI * 2);
-    ctx.arc(x + 18 * s, y - 6 * s, 18 * s, 0, Math.PI * 2);
-    ctx.arc(x + 34 * s, y + 2 * s, 20 * s, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = "#6b4b2a";
-    ctx.fillRect(x + 12 * s, y + 14 * s, 6 * s, 18 * s);
-  }
-  ctx.restore();
-}
-
-function drawTrainLine(y) {
-  const lineY = y;
-  ctx.save();
-
-  ctx.strokeStyle = "#2c6c47";
-  ctx.lineWidth = 8;
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(0, lineY);
-  ctx.lineTo(canvas.width * 0.42, lineY);
+  ctx.moveTo(0, canvas.height * 0.07);
+  ctx.quadraticCurveTo(canvas.width * 0.5, canvas.height * 0.02, canvas.width, canvas.height * 0.07);
   ctx.stroke();
 
-  for (let x = 0; x < canvas.width * 0.42; x += 40) {
-    ctx.strokeStyle = "#25563a";
-    ctx.lineWidth = 4;
+  const lightW = canvas.width * 0.12;
+  const lightH = canvas.height * 0.06;
+
+  function drawLightBank(x, y) {
+    ctx.save();
+    ctx.fillStyle = "#4d5a6d";
+    drawRoundedRectPath(x, y, lightW, lightH, 8);
+    ctx.fill();
+    ctx.strokeStyle = "#2a3442";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    const cols = 7;
+    const rows = 2;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const cx = x + 14 + c * ((lightW - 28) / (cols - 1));
+        const cy = y + 14 + r * ((lightH - 28) / (rows - 1));
+        ctx.fillStyle = "#fff8d2";
+        ctx.beginPath();
+        ctx.arc(cx, cy, 7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  drawLightBank(canvas.width * 0.18, canvas.height * 0.02);
+  drawLightBank(canvas.width * 0.70, canvas.height * 0.02);
+}
+
+function drawScoreboardCenter() {
+  const cx = canvas.width * 0.51;
+  const top = canvas.height * 0.08;
+  const boardW = canvas.width * 0.20;
+  const boardH = canvas.height * 0.18;
+
+  // top NY emblem
+  ctx.save();
+  ctx.fillStyle = "#243b73";
+  drawRoundedRectPath(cx - boardW * 0.16, top - 10, boardW * 0.32, boardH * 0.25, 18);
+  ctx.fill();
+  ctx.strokeStyle = "#1a2947";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `900 ${Math.max(28, canvas.width * 0.03)}px serif`;
+  ctx.textAlign = "center";
+  ctx.fillText("NY", cx, top + boardH * 0.13);
+
+  // main board
+  const bodyY = top + boardH * 0.18;
+  ctx.fillStyle = "#223a73";
+  drawRoundedRectPath(cx - boardW / 2, bodyY, boardW, boardH, 18);
+  ctx.fill();
+  ctx.strokeStyle = "#142544";
+  ctx.lineWidth = 5;
+  ctx.stroke();
+
+  // inner text panels
+  ctx.fillStyle = "#102446";
+  drawRoundedRectPath(cx - boardW * 0.42, bodyY + boardH * 0.10, boardW * 0.84, boardH * 0.34, 12);
+  ctx.fill();
+
+  ctx.fillStyle = "#e53a37";
+  drawRoundedRectPath(cx - boardW * 0.36, bodyY + boardH * 0.58, boardW * 0.72, boardH * 0.18, 10);
+  ctx.fill();
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `900 ${Math.max(18, canvas.width * 0.016)}px "Nunito", sans-serif`;
+  ctx.fillText("BRONX CHILDREN'S", cx, bodyY + boardH * 0.23);
+
+  ctx.fillStyle = "#ffcc33";
+  ctx.font = `900 ${Math.max(24, canvas.width * 0.022)}px "Baloo 2", sans-serif`;
+  ctx.fillText("MUSEUM", cx, bodyY + boardH * 0.41);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `900 ${Math.max(14, canvas.width * 0.014)}px "Nunito", sans-serif`;
+  ctx.fillText("HOME RUN ZONE", cx, bodyY + boardH * 0.705);
+
+  // side circles
+  function circleBadge(x, y, r) {
+    ctx.fillStyle = "#f0f5ff";
     ctx.beginPath();
-    ctx.moveTo(x + 10, lineY);
-    ctx.lineTo(x + 26, lineY + 22);
-    ctx.lineTo(x + 42, lineY);
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#b94e4b";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    ctx.fillStyle = "#cc4b4b";
+    ctx.font = `900 ${Math.max(12, r * 0.9)}px serif`;
+    ctx.fillText("Y", x, y + 5);
+  }
+
+  circleBadge(cx - boardW * 0.52, bodyY + boardH * 0.48, boardW * 0.10);
+  circleBadge(cx + boardW * 0.34, bodyY + boardH * 0.35, boardW * 0.06);
+
+  // base cabinet
+  ctx.fillStyle = "#1d2f4f";
+  drawRoundedRectPath(cx - boardW * 0.20, bodyY + boardH * 0.82, boardW * 0.40, boardH * 0.40, 10);
+  ctx.fill();
+  ctx.strokeStyle = "#12233b";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawFenceWall(yTop) {
+  const fenceY = yTop;
+  const wallY = yTop + canvas.height * 0.08;
+  const wallH = canvas.height * 0.12;
+
+  // fence
+  ctx.strokeStyle = "#5f6c7d";
+  ctx.lineWidth = 2;
+  for (let x = 0; x < canvas.width; x += 18) {
+    ctx.beginPath();
+    ctx.moveTo(x, fenceY);
+    ctx.lineTo(x + 20, wallY);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(x + 20, fenceY);
+    ctx.lineTo(x, wallY);
     ctx.stroke();
   }
 
-  const trainX = canvas.width * 0.08;
-  const cars = 4;
-  for (let i = 0; i < cars; i++) {
-    const x = trainX + i * 60;
-    ctx.fillStyle = "#d7f5ff";
-    ctx.fillRect(x, lineY - 20, 54, 18);
-    ctx.strokeStyle = "#2b81c5";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x, lineY - 20, 54, 18);
-
-    for (let w = 0; w < 3; w++) {
-      ctx.fillStyle = "#97d8ff";
-      ctx.fillRect(x + 6 + w * 14, lineY - 16, 9, 8);
-    }
+  // fence posts
+  for (let x = 0; x < canvas.width; x += canvas.width / 10) {
+    ctx.strokeStyle = "#445365";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(x, fenceY - 6);
+    ctx.lineTo(x, wallY);
+    ctx.stroke();
   }
 
-  ctx.restore();
-}
-
-function drawOutfieldWall(yTop) {
-  const wallHeight = canvas.height * 0.18;
-  const wallBottom = yTop + wallHeight;
-
-  ctx.save();
-
-  // wall body
-  const wallGrad = ctx.createLinearGradient(0, yTop, 0, wallBottom);
-  wallGrad.addColorStop(0, "#0d4fb5");
-  wallGrad.addColorStop(1, "#0a3478");
+  // wall
+  const wallGrad = ctx.createLinearGradient(0, wallY, 0, wallY + wallH);
+  wallGrad.addColorStop(0, "#304d8a");
+  wallGrad.addColorStop(1, "#223b71");
   ctx.fillStyle = wallGrad;
-  ctx.fillRect(0, yTop, canvas.width, wallHeight);
+  ctx.fillRect(0, wallY, canvas.width, wallH);
 
-  // top rail
-  ctx.fillStyle = "#ffb300";
-  ctx.fillRect(0, yTop, canvas.width, 8);
-
-  // center dark scoreboard block
-  ctx.fillStyle = "#14233a";
-  ctx.fillRect(canvas.width * 0.54, yTop + wallHeight * 0.18, canvas.width * 0.16, wallHeight * 0.48);
-
-  // subtle vertical panels
-  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.strokeStyle = "#5b78ad";
   ctx.lineWidth = 2;
   for (let x = 0; x < canvas.width; x += canvas.width / 12) {
     ctx.beginPath();
-    ctx.moveTo(x, yTop + 12);
-    ctx.lineTo(x, wallBottom);
+    ctx.moveTo(x, wallY);
+    ctx.lineTo(x, wallY + wallH);
     ctx.stroke();
   }
 
-  // minimal brand marks baked into wall
-  ctx.fillStyle = "rgba(255,255,255,0.92)";
-  ctx.font = `900 ${Math.max(22, canvas.width * 0.03)}px "Baloo 2", sans-serif`;
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.font = `900 ${Math.max(26, canvas.width * 0.028)}px serif`;
   ctx.textAlign = "center";
-  ctx.fillText("BX", canvas.width * 0.88, yTop + wallHeight * 0.64);
+  ctx.fillText("NY", canvas.width * 0.04, wallY + wallH * 0.45);
+  ctx.fillText("NY", canvas.width * 0.96, wallY + wallH * 0.45);
+  ctx.fillText("NY", canvas.width * 0.50, wallY + wallH * 0.45);
+}
 
-  ctx.font = `900 ${Math.max(28, canvas.width * 0.045)}px serif`;
-  ctx.fillText("NY", canvas.width * 0.12, yTop + wallHeight * 0.64);
+function drawIndoorField() {
+  const fieldTop = canvas.height * 0.60;
 
+  // turf
+  const turfGrad = ctx.createLinearGradient(0, fieldTop, 0, canvas.height);
+  turfGrad.addColorStop(0, "#65b84f");
+  turfGrad.addColorStop(1, "#4d9c3e");
+  ctx.fillStyle = turfGrad;
+  ctx.fillRect(0, fieldTop, canvas.width, canvas.height - fieldTop);
+
+  // turf stripes
+  const stripeH = (canvas.height - fieldTop) / 6;
+  for (let i = 0; i < 6; i++) {
+    ctx.fillStyle = i % 2 === 0 ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)";
+    ctx.fillRect(0, fieldTop + i * stripeH, canvas.width, stripeH);
+  }
+
+  // perspective white lane lines
+  ctx.strokeStyle = "rgba(255,255,255,0.55)";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(canvas.width * 0.10, canvas.height * 0.83);
+  ctx.lineTo(canvas.width * 0.60, canvas.height * 0.66);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(canvas.width * 0.38, canvas.height * 0.84);
+  ctx.lineTo(canvas.width * 0.94, canvas.height * 0.66);
+  ctx.stroke();
+
+  // batter area left
+  ctx.fillStyle = "#c97342";
+  ctx.beginPath();
+  ctx.moveTo(canvas.width * 0.00, canvas.height * 0.78);
+  ctx.lineTo(canvas.width * 0.18, canvas.height * 0.76);
+  ctx.lineTo(canvas.width * 0.28, canvas.height * 0.92);
+  ctx.lineTo(canvas.width * 0.00, canvas.height * 0.97);
+  ctx.closePath();
+  ctx.fill();
+
+  // batter box
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(canvas.width * 0.05, canvas.height * 0.86);
+  ctx.lineTo(canvas.width * 0.17, canvas.height * 0.86);
+  ctx.lineTo(canvas.width * 0.26, canvas.height * 0.97);
+  ctx.lineTo(canvas.width * 0.14, canvas.height * 0.97);
+  ctx.closePath();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(canvas.width * 0.07, canvas.height * 0.82);
+  ctx.lineTo(canvas.width * 0.19, canvas.height * 0.82);
+  ctx.lineTo(canvas.width * 0.28, canvas.height * 0.93);
+  ctx.lineTo(canvas.width * 0.16, canvas.height * 0.93);
+  ctx.closePath();
+  ctx.stroke();
+
+  // plate
+  const px = canvas.width * 0.12;
+  const py = canvas.height * 0.87;
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.moveTo(px - 18, py);
+  ctx.lineTo(px + 6, py);
+  ctx.lineTo(px + 16, py + 8);
+  ctx.lineTo(px - 2, py + 18);
+  ctx.lineTo(px - 22, py + 8);
+  ctx.closePath();
+  ctx.fill();
+
+  // mound on right
+  ctx.fillStyle = "#c26b3d";
+  ctx.beginPath();
+  ctx.ellipse(canvas.width * 0.78, canvas.height * 0.86, canvas.width * 0.12, canvas.height * 0.08, -0.08, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#f1e9d8";
+  ctx.beginPath();
+  ctx.moveTo(canvas.width * 0.83, canvas.height * 0.79);
+  ctx.lineTo(canvas.width * 0.85, canvas.height * 0.785);
+  ctx.lineTo(canvas.width * 0.86, canvas.height * 0.80);
+  ctx.lineTo(canvas.width * 0.84, canvas.height * 0.815);
+  ctx.lineTo(canvas.width * 0.825, canvas.height * 0.805);
+  ctx.closePath();
+  ctx.fill();
+
+  // center field text, subtle
+  ctx.save();
+  ctx.translate(canvas.width * 0.52, canvas.height * 0.70);
+  ctx.rotate(-0.03);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(255,255,255,0.65)";
+  ctx.font = `900 ${Math.max(18, canvas.width * 0.022)}px "Baloo 2", sans-serif`;
+  ctx.fillText("HOME RUN ZONE", 0, 0);
   ctx.restore();
 }
 
-function drawGrassAndDirt() {
-  const horizon = canvas.height * 0.46;
-  const groundTop = horizon + canvas.height * 0.10;
-
-  // grass
-  const grassGrad = ctx.createLinearGradient(0, groundTop, 0, canvas.height);
-  grassGrad.addColorStop(0, "#63d64f");
-  grassGrad.addColorStop(1, "#2da14d");
-  ctx.fillStyle = grassGrad;
-  ctx.fillRect(0, groundTop, canvas.width, canvas.height - groundTop);
-
-  // stripes
-  const stripeH = (canvas.height - groundTop) / 8;
-  for (let i = 0; i < 8; i++) {
-    ctx.fillStyle = i % 2 === 0 ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)";
-    ctx.fillRect(0, groundTop + i * stripeH, canvas.width, stripeH);
-  }
-
-  // dirt batting area - profile layout
-  ctx.fillStyle = "#cf6d2d";
-  ctx.beginPath();
-  ctx.moveTo(0, canvas.height * 0.77);
-  ctx.lineTo(canvas.width * 0.18, canvas.height * 0.77);
-  ctx.lineTo(canvas.width * 0.24, canvas.height * 0.90);
-  ctx.lineTo(0, canvas.height * 0.90);
-  ctx.closePath();
-  ctx.fill();
-
-  // plate
-  const px = canvas.width * 0.20;
-  const py = canvas.height * 0.86;
-  ctx.fillStyle = "#ffffff";
-  ctx.beginPath();
-  ctx.moveTo(px - 24, py);
-  ctx.lineTo(px + 8, py);
-  ctx.lineTo(px + 20, py + 10);
-  ctx.lineTo(px - 5, py + 24);
-  ctx.lineTo(px - 30, py + 12);
-  ctx.closePath();
-  ctx.fill();
-
-  // foul line perspective for profile feeling
-  ctx.strokeStyle = "rgba(255,255,255,0.95)";
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.moveTo(px + 10, py + 8);
-  ctx.lineTo(canvas.width * 0.92, canvas.height * 0.70);
-  ctx.stroke();
-}
-
 function drawBackground() {
-  // sky
-  const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  skyGrad.addColorStop(0, "#72d2ff");
-  skyGrad.addColorStop(0.48, "#a8ecff");
-  skyGrad.addColorStop(0.49, "#c9f7ff");
-  skyGrad.addColorStop(1, "#53b94c");
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.55);
+  skyGrad.addColorStop(0, "#2c3d57");
+  skyGrad.addColorStop(1, "#b8c8d6");
   ctx.fillStyle = skyGrad;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  drawCloud(canvas.width * 0.08, canvas.height * 0.11, 1.0, 0.92);
-  drawCloud(canvas.width * 0.34, canvas.height * 0.14, 0.8, 0.85);
-  drawCloud(canvas.width * 0.70, canvas.height * 0.10, 1.1, 0.9);
-  drawCloud(canvas.width * 0.86, canvas.height * 0.16, 0.85, 0.82);
+  drawRoofAndLights();
+  drawInteriorWindows(canvas.height * 0.16, canvas.height * 0.55);
+  drawScoreboardCenter();
+  drawFenceWall(canvas.height * 0.48);
+  drawIndoorField();
 
-  const skylineGround = canvas.height * 0.37;
-  drawBronxSkyline(skylineGround);
-  drawTreesLine(canvas.height * 0.40);
-  drawTrainLine(canvas.height * 0.35);
-  drawOutfieldWall(canvas.height * 0.43);
-  drawGrassAndDirt();
-
-  // subtle vignette
-  const vignette = ctx.createRadialGradient(
-    canvas.width * 0.5, canvas.height * 0.45, canvas.width * 0.18,
-    canvas.width * 0.5, canvas.height * 0.45, canvas.width * 0.72
-  );
-  vignette.addColorStop(0, "rgba(0,0,0,0)");
-  vignette.addColorStop(1, "rgba(0,0,0,0.12)");
-  ctx.fillStyle = vignette;
+  // faint haze
+  const haze = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  haze.addColorStop(0, "rgba(255,255,255,0.06)");
+  haze.addColorStop(1, "rgba(0,0,0,0.06)");
+  ctx.fillStyle = haze;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
 // ---------- STAND GUIDE ----------
 function drawStandGuide() {
-  const x = canvas.width * 0.22;
-  const y = canvas.height * 0.82;
-  const rx = canvas.width * 0.07;
-  const ry = canvas.height * 0.038;
+  const x = canvas.width * 0.18;
+  const y = canvas.height * 0.90;
+  const rx = canvas.width * 0.055;
+  const ry = canvas.height * 0.030;
 
   ctx.save();
   ctx.strokeStyle = "rgba(255, 213, 79, 0.95)";
-  ctx.fillStyle = "rgba(255, 213, 79, 0.15)";
+  ctx.fillStyle = "rgba(255, 213, 79, 0.14)";
   ctx.lineWidth = 5;
   ctx.setLineDash([14, 10]);
 
@@ -509,13 +624,13 @@ function drawStandGuide() {
 
   ctx.setLineDash([]);
   ctx.fillStyle = "#ffd54f";
-  ctx.font = '900 24px "Baloo 2", sans-serif';
+  ctx.font = '900 20px "Baloo 2", sans-serif';
   ctx.textAlign = "center";
-  ctx.fillText("STAND HERE", x, y + 8);
+  ctx.fillText("STAND HERE", x, y + 6);
   ctx.restore();
 }
 
-// ---------- STICK FIGURE ----------
+// ---------- SHORTER STICK FIGURE / SINGLE TORSO LINE ----------
 function drawStickBone(a, b, color, width = 6, glow = 8) {
   if (!a || !b) return;
 
@@ -545,6 +660,10 @@ function drawStickJoint(p, radius = 5, color = "#ffffff", glow = 6) {
   ctx.restore();
 }
 
+function midPoint(a, b, t = 0.5) {
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+}
+
 function drawStickFigure(pose) {
   const ls = getKeypoint(pose, "left_shoulder");
   const rs = getKeypoint(pose, "right_shoulder");
@@ -567,40 +686,49 @@ function drawStickFigure(pose) {
   const coreColor = "#ffd54f";
   const headColor = "#ffb86c";
 
-  drawStickBone(ls, rs, coreColor, 7);
-  drawStickBone(ls, lh, coreColor, 6);
-  drawStickBone(rs, rh, coreColor, 6);
-  drawStickBone(lh, rh, coreColor, 7);
+  const shoulderMid = (ls && rs) ? midPoint(ls, rs, 0.5) : null;
+  const hipMid = (lh && rh) ? midPoint(lh, rh, 0.5) : null;
+
+  // shorter torso - single line only
+  if (shoulderMid && hipMid) {
+    const shortHip = midPoint(shoulderMid, hipMid, 0.72);
+    drawStickBone(shoulderMid, shortHip, coreColor, 7);
+  }
+
+  // small shoulder line only
+  if (ls && rs) drawStickBone(ls, rs, coreColor, 5);
 
   drawStickBone(ls, le, armColor, 6);
   drawStickBone(le, lw, armColor, 6);
   drawStickBone(rs, re, armColor, 6);
   drawStickBone(re, rw, armColor, 6);
 
-  drawStickBone(lh, lk, legColor, 6);
-  drawStickBone(lk, la, legColor, 6);
-  drawStickBone(rh, rk, legColor, 6);
-  drawStickBone(rk, ra, legColor, 6);
+  // legs start from hip mid / shorter pelvis feel
+  if (hipMid && lk) drawStickBone(hipMid, lk, legColor, 6);
+  if (lk && la) drawStickBone(lk, la, legColor, 6);
+  if (hipMid && rk) drawStickBone(hipMid, rk, legColor, 6);
+  if (rk && ra) drawStickBone(rk, ra, legColor, 6);
 
-  if (nose && ls && rs) {
-    const neck = { x: (ls.x + rs.x) / 2, y: (ls.y + rs.y) / 2 };
-    drawStickBone(neck, nose, headColor, 5);
+  if (nose && shoulderMid) {
+    drawStickBone(shoulderMid, nose, headColor, 5);
   }
 
   if (nose && leye && reye) {
-    const headR = Math.max(14, Math.abs(leye.x - reye.x) * 1.1);
+    const headR = Math.max(12, Math.abs(leye.x - reye.x) * 1.0);
     ctx.save();
     ctx.strokeStyle = headColor;
     ctx.lineWidth = 4;
     ctx.shadowBlur = 8;
     ctx.shadowColor = headColor;
     ctx.beginPath();
-    ctx.arc(nose.x, nose.y + 5, headR, 0, Math.PI * 2);
+    ctx.arc(nose.x, nose.y + 4, headR, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
 
-  [ls, rs, le, re, lw, rw, lh, rh, lk, rk, la, ra].forEach(p => drawStickJoint(p, 4, "#ffffff", 5));
+  [ls, rs, le, re, lw, rw, lk, rk, la, ra].forEach(p => drawStickJoint(p, 4, "#ffffff", 5));
+  if (shoulderMid) drawStickJoint(shoulderMid, 3, "#ffffff", 4);
+  if (hipMid) drawStickJoint(hipMid, 3, "#ffffff", 4);
 
   return { rw, re, lw, le };
 }
@@ -685,9 +813,9 @@ function createPitch() {
 
   ball = {
     x: canvas.width + 30,
-    y: canvas.height * (0.44 + Math.random() * 0.12),
+    y: canvas.height * (0.70 + Math.random() * 0.08),
     vx: -parseFloat(pitchSpeedSlider.value) - Math.random() * 1.2,
-    vy: (Math.random() - 0.5) * 0.25,
+    vy: (Math.random() - 0.5) * 0.18,
     hit: false,
     active: true,
     trail: [],
