@@ -11,7 +11,6 @@ const resetBtn = document.getElementById("resetBtn");
 const muteBtn = document.getElementById("muteBtn");
 const rightHandBtn = document.getElementById("rightHandBtn");
 const leftHandBtn = document.getElementById("leftHandBtn");
-const controlsPanel = document.getElementById("controlsPanel");
 
 const scoreEl = document.getElementById("scoreEl");
 const pitchesEl = document.getElementById("pitchesEl");
@@ -34,7 +33,7 @@ pitchDelaySlider.oninput = () => pitchDelayVal.textContent = `${pitchDelaySlider
 
 let detector = null;
 let animationId = null;
-let gameState = "start"; // start | countdown | playing | paused | end
+let gameState = "start";
 let battingSide = "right";
 
 let score = 0;
@@ -50,33 +49,21 @@ let batVelocity = { x: 0, y: 0, speed: 0 };
 let ball = null;
 let hitText = "";
 let hitTextTimer = 0;
-let timingText = "";
-let timingTextTimer = 0;
 let flashTimer = 0;
-
 let confetti = [];
 let floatingStars = [];
 let homerBursts = [];
-let homerTrailParticles = [];
-let batTrail = [];
-
 let pitchTimer = null;
-let countdownTimer = null;
-let countdownValue = 5;
-let countdownActive = false;
-
 let screenShakeTimer = 0;
 let screenShakeAmount = 0;
-let bgTick = 0;
 
 const BALL_RADIUS = 14;
 const GRAVITY = 0.44;
 const CONTACT_DISTANCE = 68;
 const BAT_LENGTH = 132;
 
+// smaller overall figure on screen
 const SKELETON_SCALE = 0.68;
-const SKELETON_OFFSET_Y = 100;
-const SKELETON_OFFSET_X = 0;
 
 // ---------- AUDIO ----------
 let audioCtx = null;
@@ -88,6 +75,7 @@ function initAudio() {
     if (!AudioCtx) return;
     audioCtx = new AudioCtx();
   }
+
   if (audioCtx.state === "suspended") {
     audioCtx.resume().catch(() => {});
   }
@@ -149,15 +137,6 @@ function playHomeRunSound() {
   tone(1046.5, 0.20, "triangle", 0.12, 0.42);
 }
 
-function playCountdownBeep(n) {
-  tone(n > 1 ? 660 : 880, 0.10, "triangle", 0.11, 0);
-}
-
-function playGoSound() {
-  tone(880, 0.08, "triangle", 0.12, 0);
-  tone(1174.66, 0.12, "triangle", 0.12, 0.08);
-}
-
 // ---------- HELPERS ----------
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
@@ -172,6 +151,7 @@ function resizeCanvas() {
   canvas.width = rect.width;
   canvas.height = rect.height;
 }
+
 window.addEventListener("resize", resizeCanvas);
 
 function updateHud() {
@@ -187,27 +167,6 @@ function clearPitchTimer() {
     clearTimeout(pitchTimer);
     pitchTimer = null;
   }
-}
-
-function clearCountdownTimer() {
-  if (countdownTimer) {
-    clearTimeout(countdownTimer);
-    countdownTimer = null;
-  }
-}
-
-function showControlsPanel() {
-  if (!controlsPanel) return;
-  controlsPanel.style.transition = "opacity 500ms ease";
-  controlsPanel.style.opacity = "1";
-  controlsPanel.style.pointerEvents = "auto";
-}
-
-function hideControlsPanel() {
-  if (!controlsPanel) return;
-  controlsPanel.style.transition = "opacity 700ms ease";
-  controlsPanel.style.opacity = "0.08";
-  controlsPanel.style.pointerEvents = "none";
 }
 
 function scheduleNextPitch() {
@@ -229,39 +188,24 @@ function scheduleNextPitch() {
 
 function resetRound() {
   clearPitchTimer();
-  clearCountdownTimer();
-
   score = 0;
   hits = 0;
   misses = 0;
   bestExitVelo = 0;
   pitchesLeft = roundPitches;
-
   prevBatPoint = null;
   batVelocity = { x: 0, y: 0, speed: 0 };
   ball = null;
-
   hitText = "";
   hitTextTimer = 0;
-  timingText = "";
-  timingTextTimer = 0;
   flashTimer = 0;
-
   confetti = [];
   floatingStars = [];
   homerBursts = [];
-  homerTrailParticles = [];
-  batTrail = [];
-
   screenShakeTimer = 0;
   screenShakeAmount = 0;
-
-  countdownValue = 5;
-  countdownActive = false;
-
   updateHud();
   instructionChip.textContent = "Big upward swings can turn doubles into triples. Home runs trigger a giant celebration.";
-  showControlsPanel();
 }
 
 // ---------- CAMERA / MODEL ----------
@@ -276,9 +220,11 @@ async function setupCamera() {
   });
 
   video.srcObject = stream;
+
   await new Promise(resolve => {
     video.onloadedmetadata = () => resolve();
   });
+
   await video.play();
   resizeCanvas();
 }
@@ -287,11 +233,13 @@ async function loadModel() {
   await tf.ready();
   detector = await poseDetection.createDetector(
     poseDetection.SupportedModels.MoveNet,
-    { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
+    {
+      modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+    }
   );
 }
 
-// ---------- BACKGROUND ----------
+// ---------- CODE-DRAWN INDOOR STADIUM BACKGROUND ----------
 function drawRoundedRectPath(x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -300,6 +248,53 @@ function drawRoundedRectPath(x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r);
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
+}
+
+function drawInteriorWindows(yTop, yBottom) {
+  const cols = 11;
+  const pad = canvas.width * 0.008;
+  const usableW = canvas.width - pad * 2;
+  const colW = usableW / cols;
+
+  for (let i = 0; i < cols; i++) {
+    const x = pad + i * colW;
+
+    ctx.fillStyle = "#51637a";
+    ctx.fillRect(x, yTop, colW - 6, yBottom - yTop);
+
+    const innerPad = 6;
+    const ix = x + innerPad;
+    const iy = yTop + innerPad;
+    const iw = colW - 6 - innerPad * 2;
+    const ih = yBottom - yTop - innerPad * 2;
+
+    const winGrad = ctx.createLinearGradient(0, iy, 0, iy + ih);
+    winGrad.addColorStop(0, "#eef7ff");
+    winGrad.addColorStop(1, "#d8e7f0");
+    ctx.fillStyle = winGrad;
+    ctx.fillRect(ix, iy, iw, ih);
+
+    ctx.strokeStyle = "rgba(90,110,130,0.55)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ix + iw * 0.5, iy);
+    ctx.lineTo(ix + iw * 0.5, iy + ih);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(ix, iy + ih * 0.52);
+    ctx.lineTo(ix + iw, iy + ih * 0.52);
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(90,102,120,0.28)";
+    const baseY = iy + ih;
+    for (let b = 0; b < 4; b++) {
+      const bx = ix + b * (iw / 4) + 2;
+      const bw = iw / 6;
+      const bh = ih * (0.25 + ((b + i) % 3) * 0.12);
+      ctx.fillRect(bx, baseY - bh, bw, bh);
+    }
+  }
 }
 
 function drawRoofAndLights() {
@@ -347,101 +342,96 @@ function drawRoofAndLights() {
   drawLightBank(canvas.width * 0.70, canvas.height * 0.02);
 }
 
-function drawWindowScene(yTop, yBottom) {
-  const cols = 11;
-  const pad = canvas.width * 0.008;
-  const usableW = canvas.width - pad * 2;
-  const colW = usableW / cols;
-  const sceneH = yBottom - yTop;
-
-  const letters = [
-    { ch: "B", color: "rgba(255,210,50,0.32)", x: 0.11 },
-    { ch: "R", color: "rgba(245,140,50,0.32)", x: 0.29 },
-    { ch: "O", color: "rgba(50,180,240,0.32)", x: 0.50 },
-    { ch: "N", color: "rgba(210,80,200,0.32)", x: 0.70 },
-    { ch: "X", color: "rgba(90,200,90,0.32)", x: 0.88 }
-  ];
+function drawScoreboardCenter() {
+  const cx = canvas.width * 0.51;
+  const top = canvas.height * 0.08;
+  const boardW = canvas.width * 0.20;
+  const boardH = canvas.height * 0.18;
 
   ctx.save();
+  ctx.fillStyle = "#243b73";
+  drawRoundedRectPath(cx - boardW * 0.16, top - 10, boardW * 0.32, boardH * 0.25, 18);
+  ctx.fill();
+  ctx.strokeStyle = "#1a2947";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `900 ${Math.max(28, canvas.width * 0.03)}px serif`;
   ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.font = `900 ${Math.max(120, canvas.width * 0.16)}px "Baloo 2", sans-serif`;
+  ctx.fillText("NY", cx, top + boardH * 0.13);
 
-  for (const l of letters) {
-    const drift = Math.sin(bgTick * 0.01 + l.x * 4) * 6;
-    ctx.fillStyle = l.color;
-    ctx.fillText(l.ch, canvas.width * l.x + drift, yTop + sceneH * 0.54);
+  const bodyY = top + boardH * 0.18;
+  ctx.fillStyle = "#223a73";
+  drawRoundedRectPath(cx - boardW / 2, bodyY, boardW, boardH, 18);
+  ctx.fill();
+  ctx.strokeStyle = "#142544";
+  ctx.lineWidth = 5;
+  ctx.stroke();
+
+  ctx.fillStyle = "#102446";
+  drawRoundedRectPath(cx - boardW * 0.42, bodyY + boardH * 0.10, boardW * 0.84, boardH * 0.34, 12);
+  ctx.fill();
+
+  ctx.fillStyle = "#e53a37";
+  drawRoundedRectPath(cx - boardW * 0.36, bodyY + boardH * 0.58, boardW * 0.72, boardH * 0.18, 10);
+  ctx.fill();
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `900 ${Math.max(18, canvas.width * 0.016)}px "Nunito", sans-serif`;
+  ctx.fillText("BRONX CHILDREN'S", cx, bodyY + boardH * 0.23);
+
+  ctx.fillStyle = "#ffcc33";
+  ctx.font = `900 ${Math.max(24, canvas.width * 0.022)}px "Baloo 2", sans-serif`;
+  ctx.fillText("MUSEUM", cx, bodyY + boardH * 0.41);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `900 ${Math.max(14, canvas.width * 0.014)}px "Nunito", sans-serif`;
+  ctx.fillText("HOME RUN ZONE", cx, bodyY + boardH * 0.705);
+
+  function circleBadge(x, y, r) {
+    ctx.fillStyle = "#f0f5ff";
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#b94e4b";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    ctx.fillStyle = "#cc4b4b";
+    ctx.font = `900 ${Math.max(12, r * 0.9)}px serif`;
+    ctx.fillText("Y", x, y + 5);
   }
+
+  circleBadge(cx - boardW * 0.52, bodyY + boardH * 0.48, boardW * 0.10);
+  circleBadge(cx + boardW * 0.34, bodyY + boardH * 0.35, boardW * 0.06);
+
+  ctx.fillStyle = "#1d2f4f";
+  drawRoundedRectPath(cx - boardW * 0.20, bodyY + boardH * 0.82, boardW * 0.40, boardH * 0.40, 10);
+  ctx.fill();
+  ctx.strokeStyle = "#12233b";
+  ctx.lineWidth = 4;
+  ctx.stroke();
   ctx.restore();
-
-  for (let i = 0; i < cols; i++) {
-    const x = pad + i * colW;
-
-    ctx.fillStyle = "#51637a";
-    ctx.fillRect(x, yTop, colW - 6, sceneH);
-
-    const innerPad = 6;
-    const ix = x + innerPad;
-    const iy = yTop + innerPad;
-    const iw = colW - 6 - innerPad * 2;
-    const ih = sceneH - innerPad * 2;
-
-    const winGrad = ctx.createLinearGradient(0, iy, 0, iy + ih);
-    winGrad.addColorStop(0, "rgba(238,247,255,0.86)");
-    winGrad.addColorStop(1, "rgba(216,231,240,0.78)");
-    ctx.fillStyle = winGrad;
-    ctx.fillRect(ix, iy, iw, ih);
-
-    ctx.fillStyle = "rgba(90,102,120,0.22)";
-    const baseY = iy + ih;
-    const drift = (bgTick * 0.12) % (iw * 0.4);
-    for (let b = -1; b < 5; b++) {
-      const bx = ix + b * (iw / 4) - drift;
-      const bw = iw / 6;
-      const bh = ih * (0.22 + ((b + i + 6) % 3) * 0.12);
-      ctx.fillRect(bx, baseY - bh, bw, bh);
-    }
-
-    ctx.strokeStyle = "rgba(255,255,255,0.18)";
-    ctx.lineWidth = 7;
-    ctx.beginPath();
-    ctx.moveTo(ix + iw * 0.18, iy);
-    ctx.lineTo(ix + iw * 0.46, iy + ih);
-    ctx.stroke();
-
-    ctx.strokeStyle = "rgba(90,110,130,0.55)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(ix + iw * 0.5, iy);
-    ctx.lineTo(ix + iw * 0.5, iy + ih);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(ix, iy + ih * 0.52);
-    ctx.lineTo(ix + iw, iy + ih * 0.52);
-    ctx.stroke();
-  }
 }
 
 function drawFenceWall(yTop) {
   const fenceY = yTop;
-  const wallY = yTop + canvas.height * 0.07;
-  const wallH = canvas.height * 0.11;
+  const wallY = yTop + canvas.height * 0.08;
+  const wallH = canvas.height * 0.12;
 
   ctx.strokeStyle = "#5f6c7d";
   ctx.lineWidth = 2;
-  const fenceDrift = (bgTick * 0.08) % 18;
-  for (let x = -20; x < canvas.width + 20; x += 18) {
-    const xx = x - fenceDrift;
-
+  for (let x = 0; x < canvas.width; x += 18) {
     ctx.beginPath();
-    ctx.moveTo(xx, fenceY);
-    ctx.lineTo(xx + 20, wallY);
+    ctx.moveTo(x, fenceY);
+    ctx.lineTo(x + 20, wallY);
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.moveTo(xx + 20, fenceY);
-    ctx.lineTo(xx, wallY);
+    ctx.moveTo(x + 20, fenceY);
+    ctx.lineTo(x, wallY);
     ctx.stroke();
   }
 
@@ -460,53 +450,25 @@ function drawFenceWall(yTop) {
   ctx.fillStyle = wallGrad;
   ctx.fillRect(0, wallY, canvas.width, wallH);
 
-  const sections = 10;
-  const sectionW = canvas.width / sections;
-
-  for (let i = 0; i < sections; i++) {
-    const x = i * sectionW;
-    const cx = x + sectionW / 2;
-    const cy = wallY + wallH * 0.56;
-
-    if (i % 2 === 0) {
-      ctx.fillStyle = "rgba(255,255,255,0.95)";
-      ctx.font = `900 ${Math.max(18, canvas.width * 0.018)}px serif`;
-      ctx.textAlign = "center";
-      ctx.fillText("NY", cx, cy);
-    } else {
-      const barW = Math.max(18, canvas.width * 0.010);
-      const barH = 4;
-
-      ctx.fillStyle = "#f4c542";
-      ctx.fillRect(cx - 42, cy - 13, barW, barH);
-
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(cx - 42, cy - 5, barW, barH);
-
-      ctx.fillStyle = "#111111";
-      ctx.fillRect(cx - 42, cy + 3, barW, barH);
-
-      ctx.fillStyle = "#ffffff";
-      ctx.font = `700 ${Math.max(10, canvas.width * 0.010)}px sans-serif`;
-      ctx.textAlign = "left";
-      ctx.fillText("PLAYERS", cx - 18, cy - 4);
-      ctx.fillText("ALLIANCE", cx - 18, cy + 10);
-    }
-  }
-
-  ctx.strokeStyle = "rgba(255,255,255,0.15)";
+  ctx.strokeStyle = "#5b78ad";
   ctx.lineWidth = 2;
-  for (let i = 1; i < sections; i++) {
-    const x = i * sectionW;
+  for (let x = 0; x < canvas.width; x += canvas.width / 12) {
     ctx.beginPath();
     ctx.moveTo(x, wallY);
     ctx.lineTo(x, wallY + wallH);
     ctx.stroke();
   }
+
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.font = `900 ${Math.max(26, canvas.width * 0.028)}px serif`;
+  ctx.textAlign = "center";
+  ctx.fillText("NY", canvas.width * 0.04, wallY + wallH * 0.45);
+  ctx.fillText("NY", canvas.width * 0.96, wallY + wallH * 0.45);
+  ctx.fillText("NY", canvas.width * 0.50, wallY + wallH * 0.45);
 }
 
 function drawIndoorField() {
-  const fieldTop = canvas.height * 0.68;
+  const fieldTop = canvas.height * 0.60;
 
   const turfGrad = ctx.createLinearGradient(0, fieldTop, 0, canvas.height);
   turfGrad.addColorStop(0, "#65b84f");
@@ -515,41 +477,52 @@ function drawIndoorField() {
   ctx.fillRect(0, fieldTop, canvas.width, canvas.height - fieldTop);
 
   const stripeH = (canvas.height - fieldTop) / 6;
-  const stripeShift = Math.sin(bgTick * 0.01) * 4;
   for (let i = 0; i < 6; i++) {
     ctx.fillStyle = i % 2 === 0 ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)";
-    ctx.fillRect(stripeShift, fieldTop + i * stripeH, canvas.width, stripeH);
+    ctx.fillRect(0, fieldTop + i * stripeH, canvas.width, stripeH);
   }
+
+  ctx.strokeStyle = "rgba(255,255,255,0.55)";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(canvas.width * 0.10, canvas.height * 0.83);
+  ctx.lineTo(canvas.width * 0.60, canvas.height * 0.66);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(canvas.width * 0.38, canvas.height * 0.84);
+  ctx.lineTo(canvas.width * 0.94, canvas.height * 0.66);
+  ctx.stroke();
 
   ctx.fillStyle = "#c97342";
   ctx.beginPath();
-  ctx.moveTo(canvas.width * 0.00, canvas.height * 0.80);
-  ctx.lineTo(canvas.width * 0.18, canvas.height * 0.78);
-  ctx.lineTo(canvas.width * 0.28, canvas.height * 0.93);
-  ctx.lineTo(canvas.width * 0.00, canvas.height * 0.98);
+  ctx.moveTo(canvas.width * 0.00, canvas.height * 0.78);
+  ctx.lineTo(canvas.width * 0.18, canvas.height * 0.76);
+  ctx.lineTo(canvas.width * 0.28, canvas.height * 0.92);
+  ctx.lineTo(canvas.width * 0.00, canvas.height * 0.97);
   ctx.closePath();
   ctx.fill();
 
   ctx.strokeStyle = "#ffffff";
   ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.moveTo(canvas.width * 0.05, canvas.height * 0.87);
-  ctx.lineTo(canvas.width * 0.17, canvas.height * 0.87);
-  ctx.lineTo(canvas.width * 0.26, canvas.height * 0.98);
-  ctx.lineTo(canvas.width * 0.14, canvas.height * 0.98);
+  ctx.moveTo(canvas.width * 0.05, canvas.height * 0.86);
+  ctx.lineTo(canvas.width * 0.17, canvas.height * 0.86);
+  ctx.lineTo(canvas.width * 0.26, canvas.height * 0.97);
+  ctx.lineTo(canvas.width * 0.14, canvas.height * 0.97);
   ctx.closePath();
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(canvas.width * 0.07, canvas.height * 0.83);
-  ctx.lineTo(canvas.width * 0.19, canvas.height * 0.83);
-  ctx.lineTo(canvas.width * 0.28, canvas.height * 0.94);
-  ctx.lineTo(canvas.width * 0.16, canvas.height * 0.94);
+  ctx.moveTo(canvas.width * 0.07, canvas.height * 0.82);
+  ctx.lineTo(canvas.width * 0.19, canvas.height * 0.82);
+  ctx.lineTo(canvas.width * 0.28, canvas.height * 0.93);
+  ctx.lineTo(canvas.width * 0.16, canvas.height * 0.93);
   ctx.closePath();
   ctx.stroke();
 
   const px = canvas.width * 0.12;
-  const py = canvas.height * 0.89;
+  const py = canvas.height * 0.87;
   ctx.fillStyle = "#ffffff";
   ctx.beginPath();
   ctx.moveTo(px - 18, py);
@@ -562,31 +535,30 @@ function drawIndoorField() {
 
   ctx.fillStyle = "#c26b3d";
   ctx.beginPath();
-  ctx.ellipse(
-    canvas.width * 0.78,
-    canvas.height * 0.88,
-    canvas.width * 0.12,
-    canvas.height * 0.08,
-    -0.08,
-    0,
-    Math.PI * 2
-  );
+  ctx.ellipse(canvas.width * 0.78, canvas.height * 0.86, canvas.width * 0.12, canvas.height * 0.08, -0.08, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.fillStyle = "#f1e9d8";
   ctx.beginPath();
-  ctx.moveTo(canvas.width * 0.83, canvas.height * 0.81);
-  ctx.lineTo(canvas.width * 0.85, canvas.height * 0.805);
-  ctx.lineTo(canvas.width * 0.86, canvas.height * 0.82);
-  ctx.lineTo(canvas.width * 0.84, canvas.height * 0.835);
-  ctx.lineTo(canvas.width * 0.825, canvas.height * 0.825);
+  ctx.moveTo(canvas.width * 0.83, canvas.height * 0.79);
+  ctx.lineTo(canvas.width * 0.85, canvas.height * 0.785);
+  ctx.lineTo(canvas.width * 0.86, canvas.height * 0.80);
+  ctx.lineTo(canvas.width * 0.84, canvas.height * 0.815);
+  ctx.lineTo(canvas.width * 0.825, canvas.height * 0.805);
   ctx.closePath();
   ctx.fill();
+
+  ctx.save();
+  ctx.translate(canvas.width * 0.52, canvas.height * 0.70);
+  ctx.rotate(-0.03);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(255,255,255,0.65)";
+  ctx.font = `900 ${Math.max(18, canvas.width * 0.022)}px "Baloo 2", sans-serif`;
+  ctx.fillText("HOME RUN ZONE", 0, 0);
+  ctx.restore();
 }
 
 function drawBackground() {
-  bgTick += 1;
-
   const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.55);
   skyGrad.addColorStop(0, "#2c3d57");
   skyGrad.addColorStop(1, "#b8c8d6");
@@ -594,8 +566,9 @@ function drawBackground() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   drawRoofAndLights();
-  drawWindowScene(canvas.height * 0.16, canvas.height * 0.55);
-  drawFenceWall(canvas.height * 0.50);
+  drawInteriorWindows(canvas.height * 0.16, canvas.height * 0.55);
+  drawScoreboardCenter();
+  drawFenceWall(canvas.height * 0.48);
   drawIndoorField();
 
   const haze = ctx.createLinearGradient(0, 0, 0, canvas.height);
@@ -605,12 +578,12 @@ function drawBackground() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
-// ---------- SKELETON ----------
+// ---------- SKELETON SCALING ----------
 function scalePoint(p, center, scale) {
   if (!p) return null;
   return {
-    x: center.x + (p.x - center.x) * scale + SKELETON_OFFSET_X,
-    y: center.y + (p.y - center.y) * scale + SKELETON_OFFSET_Y
+    x: center.x + (p.x - center.x) * scale,
+    y: center.y + (p.y - center.y) * scale
   };
 }
 
@@ -623,15 +596,10 @@ function getPoseCenter(points) {
   };
 }
 
-function getTimingFeedback(batTip, ballObj) {
-  const diff = batTip.x - ballObj.x;
-  if (Math.abs(diff) < 25) return { label: "PERFECT!", powerBonus: 1.15, direction: 1 };
-  if (diff < -25) return { label: "TOO EARLY", powerBonus: 0.85, direction: 1.2 };
-  return { label: "TOO LATE", powerBonus: 0.85, direction: 0.8 };
-}
-
+// ---------- SHORTER STICK FIGURE / SINGLE TORSO LINE ----------
 function drawStickBone(a, b, color, width = 6, glow = 8) {
   if (!a || !b) return;
+
   ctx.save();
   ctx.strokeStyle = color;
   ctx.lineWidth = width;
@@ -647,6 +615,7 @@ function drawStickBone(a, b, color, width = 6, glow = 8) {
 
 function drawStickJoint(p, radius = 5, color = "#ffffff", glow = 6) {
   if (!p) return;
+
   ctx.save();
   ctx.fillStyle = color;
   ctx.shadowBlur = glow;
@@ -659,51 +628,6 @@ function drawStickJoint(p, radius = 5, color = "#ffffff", glow = 6) {
 
 function midPoint(a, b, t = 0.5) {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-}
-
-function drawBatTrail() {
-  if (batTrail.length < 2) return;
-
-  for (let i = 1; i < batTrail.length; i++) {
-    const a = batTrail[i - 1];
-    const b = batTrail[i];
-    const alpha = i / batTrail.length;
-
-    ctx.save();
-    ctx.strokeStyle = `rgba(${a.color.r}, ${a.color.g}, ${a.color.b}, ${alpha * 0.55})`;
-    ctx.lineWidth = 4 + alpha * 8;
-    ctx.lineCap = "round";
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = `rgba(${a.color.r}, ${a.color.g}, ${a.color.b}, 0.8)`;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-    ctx.restore();
-  }
-}
-
-function updateBatTrail(batTip) {
-  if (!batTip) return;
-
-  const strong = batVelocity.speed > 520;
-  const color = strong ? { r: 255, g: 208, b: 70 } : { r: 88, g: 225, b: 255 };
-
-  batTrail.push({
-    x: batTip.x,
-    y: batTip.y,
-    life: 10,
-    color
-  });
-
-  if (batTrail.length > 12) batTrail.shift();
-}
-
-function tickBatTrail() {
-  for (let i = batTrail.length - 1; i >= 0; i--) {
-    batTrail[i].life--;
-    if (batTrail[i].life <= 0) batTrail.splice(i, 1);
-  }
 }
 
 function drawStickFigure(pose) {
@@ -767,7 +691,9 @@ function drawStickFigure(pose) {
   if (hipMid && rk) drawStickBone(hipMid, rk, legColor, 6);
   if (rk && ra) drawStickBone(rk, ra, legColor, 6);
 
-  if (nose && shoulderMid) drawStickBone(shoulderMid, nose, headColor, 5);
+  if (nose && shoulderMid) {
+    drawStickBone(shoulderMid, nose, headColor, 5);
+  }
 
   if (nose && leye && reye) {
     const headR = Math.max(10, Math.abs(leye.x - reye.x) * 0.95);
@@ -861,7 +787,7 @@ function updateBatVelocity(point) {
   prevBatPoint = { ...point, t: now };
 }
 
-// ---------- BALL ----------
+// ---------- BALL / HITS ----------
 function createPitch() {
   if (pitchesLeft <= 0) return;
   if (gameState !== "playing") return;
@@ -869,7 +795,7 @@ function createPitch() {
 
   ball = {
     x: canvas.width + 30,
-    y: canvas.height * (0.62 + Math.random() * 0.06),
+    y: canvas.height * (0.70 + Math.random() * 0.08),
     vx: -parseFloat(pitchSpeedSlider.value) - Math.random() * 1.2,
     vy: (Math.random() - 0.5) * 0.18,
     hit: false,
@@ -897,6 +823,27 @@ function classifyHit(power, upwardSwing) {
   return { label: "FOUL TIP!", points: 8, confettiCount: 6, launchBoost: 0.54 };
 }
 
+function triggerHomeRunCelebration(x, y) {
+  screenShakeTimer = 28;
+  screenShakeAmount = 14;
+  flashTimer = 14;
+
+  for (let i = 0; i < 4; i++) {
+    homerBursts.push({
+      x: x + (Math.random() - 0.5) * 120,
+      y: y + (Math.random() - 0.5) * 80,
+      radius: 10,
+      life: 26 + i * 4,
+      color: ["#ffd54f", "#42a5f5", "#ff7043", "#66bb6a"][i % 4]
+    });
+  }
+
+  spawnConfetti(x, y, 100);
+  spawnStars(x, y, "HOME RUN!");
+  spawnStars(x + 80, y - 40, "HOME RUN!");
+  spawnStars(x - 80, y - 20, "HOME RUN!");
+}
+
 function tryHit(batTip) {
   if (!ball || !ball.active || ball.hit) return;
 
@@ -906,11 +853,7 @@ function tryHit(batTip) {
 
   ball.hit = true;
 
-  const timing = getTimingFeedback(batTip, ball);
-
-  let power = clamp(batVelocity.speed / 700, 0.35, 2.1);
-  power *= timing.powerBonus;
-
+  const power = clamp(batVelocity.speed / 700, 0.35, 2.1);
   const upwardSwing = clamp((-batVelocity.y) / 700, -0.4, 1.0);
 
   let lateral;
@@ -925,7 +868,7 @@ function tryHit(batTip) {
   const baseVX = 9 + power * 8;
   const baseVY = -(4 + Math.max(0, upwardSwing) * 7 + power * 2.2);
 
-  ball.vx = lateral * baseVX * result.launchBoost * timing.direction + (Math.random() - 0.5) * 1.4;
+  ball.vx = lateral * baseVX * result.launchBoost + (Math.random() - 0.5) * 1.4;
   ball.vy = baseVY * result.launchBoost + (Math.random() - 0.5) * 1.0;
   ball.result = result.label;
 
@@ -934,12 +877,7 @@ function tryHit(batTip) {
   bestExitVelo = Math.max(bestExitVelo, power * 100);
   pitchesLeft--;
 
-  hitText = result.label;
-  hitTextTimer = 34;
-  timingText = timing.label;
-  timingTextTimer = 28;
-  flashTimer = result.label === "HOME RUN!" ? 9 : 4;
-
+  showHitText(result.label);
   spawnConfetti(ball.x, ball.y, result.confettiCount);
   spawnStars(ball.x, ball.y, result.label);
   updateHud();
@@ -947,13 +885,13 @@ function tryHit(batTip) {
   if (result.label === "HOME RUN!") {
     playHomeRunSound();
     triggerHomeRunCelebration(ball.x, ball.y);
-    instructionChip.textContent = "HOME RUN! PERFECT SWING!";
+    instructionChip.textContent = "HOME RUN! BIG celebration!";
   } else if (result.label === "TRIPLE!" || result.label === "DOUBLE!") {
     playBigHitSound();
-    instructionChip.textContent = timing.label;
+    instructionChip.textContent = result.label;
   } else {
     playHitSound();
-    instructionChip.textContent = timing.label;
+    instructionChip.textContent = result.label;
   }
 }
 
@@ -973,20 +911,6 @@ function resolveFinishedHit() {
   scheduleNextPitch();
 }
 
-function spawnHomeRunTrail() {
-  if (!ball || ball.result !== "HOME RUN!") return;
-
-  homerTrailParticles.push({
-    x: ball.x,
-    y: ball.y,
-    vx: (Math.random() - 0.5) * 1.5,
-    vy: (Math.random() - 0.5) * 1.5,
-    life: 18 + Math.random() * 8,
-    size: 4 + Math.random() * 5,
-    color: ["#ffd54f", "#ffffff", "#42a5f5", "#ff7043"][Math.floor(Math.random() * 4)]
-  });
-}
-
 function updateBall() {
   if (!ball || !ball.active) return;
   if (gameState !== "playing") return;
@@ -998,7 +922,9 @@ function updateBall() {
     ball.trail.push({ x: ball.x, y: ball.y, a: 0.16 });
     if (ball.trail.length > 7) ball.trail.shift();
 
-    if (ball.x < -40) resolveMiss();
+    if (ball.x < -40) {
+      resolveMiss();
+    }
   } else {
     ball.vy += GRAVITY;
     ball.vx *= 0.992;
@@ -1009,11 +935,6 @@ function updateBall() {
 
     ball.trail.push({ x: ball.x, y: ball.y, a: 0.24 });
     if (ball.trail.length > 16) ball.trail.shift();
-
-    if (ball.result === "HOME RUN!") {
-      spawnHomeRunTrail();
-      spawnHomeRunTrail();
-    }
 
     if (ball.y > canvas.height + 60 || ball.x < -90 || ball.x > canvas.width + 90) {
       resolveFinishedHit();
@@ -1034,8 +955,8 @@ function drawBall() {
   }
 
   ctx.save();
-  ctx.shadowBlur = ball.result === "HOME RUN!" ? 24 : 14;
-  ctx.shadowColor = ball.result === "HOME RUN!" ? "#ffd54f" : "#ffffff";
+  ctx.shadowBlur = 14;
+  ctx.shadowColor = "#ffffff";
   ctx.fillStyle = "#ffffff";
   ctx.beginPath();
   ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
@@ -1105,6 +1026,12 @@ function drawMiniMap() {
 }
 
 // ---------- FX ----------
+function showHitText(text) {
+  hitText = text;
+  hitTextTimer = 34;
+  flashTimer = text === "HOME RUN!" ? 9 : 4;
+}
+
 function spawnConfetti(x, y, count) {
   for (let i = 0; i < count; i++) {
     confetti.push({
@@ -1132,27 +1059,6 @@ function spawnStars(x, y, label) {
   }
 }
 
-function triggerHomeRunCelebration(x, y) {
-  screenShakeTimer = 28;
-  screenShakeAmount = 14;
-  flashTimer = 14;
-
-  for (let i = 0; i < 4; i++) {
-    homerBursts.push({
-      x: x + (Math.random() - 0.5) * 120,
-      y: y + (Math.random() - 0.5) * 80,
-      radius: 10,
-      life: 26 + i * 4,
-      color: ["#ffd54f", "#42a5f5", "#ff7043", "#66bb6a"][i % 4]
-    });
-  }
-
-  spawnConfetti(x, y, 100);
-  spawnStars(x, y, "HOME RUN!");
-  spawnStars(x + 80, y - 40, "HOME RUN!");
-  spawnStars(x - 80, y - 20, "HOME RUN!");
-}
-
 function updateAndDrawConfetti() {
   for (let i = confetti.length - 1; i >= 0; i--) {
     const p = confetti[i];
@@ -1173,6 +1079,7 @@ function drawStar(x, y, r, color) {
   ctx.translate(x, y);
   ctx.fillStyle = color;
   ctx.beginPath();
+
   for (let i = 0; i < 5; i++) {
     const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
     const sx = Math.cos(a) * r;
@@ -1182,6 +1089,7 @@ function drawStar(x, y, r, color) {
     const a2 = a + Math.PI / 5;
     ctx.lineTo(Math.cos(a2) * r * 0.45, Math.sin(a2) * r * 0.45);
   }
+
   ctx.closePath();
   ctx.fill();
   ctx.restore();
@@ -1216,60 +1124,27 @@ function updateAndDrawHomerBursts() {
   }
 }
 
-function updateAndDrawHomerTrailParticles() {
-  for (let i = homerTrailParticles.length - 1; i >= 0; i--) {
-    const p = homerTrailParticles[i];
-    p.x += p.vx;
-    p.y += p.vy;
-    p.life--;
-
-    ctx.save();
-    ctx.globalAlpha = Math.max(p.life / 24, 0);
-    ctx.fillStyle = p.color;
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    if (p.life <= 0) homerTrailParticles.splice(i, 1);
-  }
-}
-
 function drawHitOverlay() {
   if (hitTextTimer > 0) {
     const scale = 1 + Math.sin((34 - hitTextTimer) * 0.3) * 0.08;
+
     ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height * 0.22);
+    ctx.translate(canvas.width / 2, canvas.height * 0.23);
     ctx.scale(scale, scale);
+
     ctx.textAlign = "center";
     ctx.lineWidth = 9;
     ctx.strokeStyle = "#14304b";
-    ctx.fillStyle = hitText.includes("HOME RUN!") ? "#ffd54f" : "#ffffff";
-    ctx.font = '900 64px "Baloo 2", sans-serif';
+    ctx.fillStyle = hitText === "HOME RUN!" ? "#ffd54f" : "#ffffff";
+    ctx.font = hitText.length > 8
+      ? '900 56px "Baloo 2", sans-serif'
+      : '900 66px "Baloo 2", sans-serif';
+
     ctx.strokeText(hitText, 0, 0);
     ctx.fillText(hitText, 0, 0);
     ctx.restore();
+
     hitTextTimer--;
-  }
-
-  if (timingTextTimer > 0) {
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.lineWidth = 7;
-    ctx.strokeStyle = "#14304b";
-
-    let fill = "#ffffff";
-    if (timingText === "PERFECT!") fill = "#66e07a";
-    if (timingText === "TOO EARLY" || timingText === "TOO LATE") fill = "#ffcc66";
-
-    ctx.fillStyle = fill;
-    ctx.font = '900 40px "Baloo 2", sans-serif';
-    ctx.strokeText(timingText, canvas.width / 2, canvas.height * 0.30);
-    ctx.fillText(timingText, canvas.width / 2, canvas.height * 0.30);
-    ctx.restore();
-    timingTextTimer--;
   }
 
   if (flashTimer > 0) {
@@ -1332,59 +1207,6 @@ function drawEndOverlay() {
   ctx.fillText(`Hits: ${hits}   |   Best EV: ${Math.round(bestExitVelo)}`, canvas.width / 2, canvas.height * 0.50);
 }
 
-function drawCountdownOverlay() {
-  ctx.fillStyle = "rgba(0,0,0,0.18)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#ffd54f";
-  ctx.lineWidth = 8;
-  ctx.strokeStyle = "#14304b";
-
-  if (countdownValue > 0) {
-    ctx.font = '900 120px "Baloo 2", sans-serif';
-    ctx.strokeText(String(countdownValue), canvas.width / 2, canvas.height * 0.45);
-    ctx.fillText(String(countdownValue), canvas.width / 2, canvas.height * 0.45);
-
-    ctx.fillStyle = "#ffffff";
-    ctx.font = '900 28px "Nunito", sans-serif';
-    ctx.fillText("Get set...", canvas.width / 2, canvas.height * 0.55);
-  } else {
-    ctx.font = '900 90px "Baloo 2", sans-serif';
-    ctx.strokeText("SWING!", canvas.width / 2, canvas.height * 0.45);
-    ctx.fillText("SWING!", canvas.width / 2, canvas.height * 0.45);
-  }
-}
-
-// ---------- COUNTDOWN ----------
-function startCountdown() {
-  clearCountdownTimer();
-  countdownActive = true;
-  countdownValue = 5;
-  gameState = "countdown";
-  instructionChip.textContent = "Get set...";
-  hideControlsPanel();
-
-  const tick = () => {
-    if (!countdownActive) return;
-
-    if (countdownValue > 0) {
-      playCountdownBeep(countdownValue);
-      instructionChip.textContent = `Starting in ${countdownValue}...`;
-      countdownValue--;
-      countdownTimer = setTimeout(tick, 1000);
-    } else {
-      playGoSound();
-      instructionChip.textContent = "Swing!";
-      countdownActive = false;
-      gameState = "playing";
-      createPitch();
-    }
-  };
-
-  tick();
-}
-
 // ---------- SIDE SELECT ----------
 function updateSideButtons() {
   if (battingSide === "right") {
@@ -1421,58 +1243,54 @@ async function loop() {
 
   let pose = null;
 
-  if (detector && (gameState === "playing" || gameState === "countdown")) {
+  if (detector && gameState === "playing") {
     const poses = await detector.estimatePoses(video, { flipHorizontal: true });
     pose = poses[0] || null;
   }
 
-  if (pose) {
-    const points = drawStickFigure(pose);
-    const battingArm = getBattingArm(points);
+  if (gameState === "playing") {
+    if (pose) {
+      const points = drawStickFigure(pose);
+      const battingArm = getBattingArm(points);
 
-    if (battingArm) {
-      const batTip = drawBatFromSide(battingArm.wrist, battingArm.elbow);
-      if (batTip) {
-        updateBatVelocity(batTip);
-        updateBatTrail(batTip);
-
-        if (gameState === "playing") {
+      if (battingArm) {
+        const batTip = drawBatFromSide(battingArm.wrist, battingArm.elbow);
+        if (batTip) {
+          updateBatVelocity(batTip);
           tryHit(batTip);
         }
       }
     }
-  }
 
-  drawBatTrail();
-
-  if (gameState === "playing") {
     updateBall();
     drawBall();
     updateAndDrawConfetti();
     updateAndDrawStars();
     updateAndDrawHomerBursts();
-    updateAndDrawHomerTrailParticles();
     drawHitOverlay();
 
     if (pitchesLeft <= 0 && !ball) {
       gameState = "end";
-      showControlsPanel();
       instructionChip.textContent = "Round over. Press Start Game to play again.";
     }
   } else {
     updateAndDrawConfetti();
     updateAndDrawStars();
     updateAndDrawHomerBursts();
-    updateAndDrawHomerTrailParticles();
     drawHitOverlay();
   }
 
-  tickBatTrail();
+  if (gameState === "start") {
+    drawStartOverlay();
+  }
 
-  if (gameState === "start") drawStartOverlay();
-  if (gameState === "countdown") drawCountdownOverlay();
-  if (gameState === "paused") drawPauseOverlay();
-  if (gameState === "end") drawEndOverlay();
+  if (gameState === "paused") {
+    drawPauseOverlay();
+  }
+
+  if (gameState === "end") {
+    drawEndOverlay();
+  }
 
   ctx.restore();
   animationId = requestAnimationFrame(loop);
@@ -1491,7 +1309,6 @@ async function startOrResumeGame() {
     gameState = "playing";
     pauseBtn.textContent = "Pause Game";
     instructionChip.textContent = "Game resumed.";
-    hideControlsPanel();
     if (!ball) scheduleNextPitch();
     playStartSound();
     if (!animationId) loop();
@@ -1499,11 +1316,15 @@ async function startOrResumeGame() {
   }
 
   resetRound();
+  gameState = "playing";
   pauseBtn.textContent = "Pause Game";
+  instructionChip.textContent = "Get ready...";
+  scheduleNextPitch();
   playStartSound();
-  startCountdown();
 
-  if (!animationId) loop();
+  if (!animationId) {
+    loop();
+  }
 }
 
 function togglePause() {
@@ -1511,44 +1332,24 @@ function togglePause() {
     gameState = "paused";
     pauseBtn.textContent = "Resume Game";
     clearPitchTimer();
-    clearCountdownTimer();
-    showControlsPanel();
-    instructionChip.textContent = "Game paused.";
-    return;
-  }
-
-  if (gameState === "countdown") {
-    gameState = "paused";
-    countdownActive = false;
-    clearCountdownTimer();
-    pauseBtn.textContent = "Resume Game";
-    showControlsPanel();
     instructionChip.textContent = "Game paused.";
     return;
   }
 
   if (gameState === "paused") {
+    gameState = "playing";
     pauseBtn.textContent = "Pause Game";
-
-    if (!ball && hits === 0 && misses === 0 && pitchesLeft === roundPitches) {
-      startCountdown();
-    } else {
-      gameState = "playing";
-      hideControlsPanel();
-      instructionChip.textContent = "Game resumed.";
-      if (!ball) scheduleNextPitch();
-      playStartSound();
-    }
+    instructionChip.textContent = "Game resumed.";
+    if (!ball) scheduleNextPitch();
+    playStartSound();
   }
 }
 
 function resetGame() {
   clearPitchTimer();
-  clearCountdownTimer();
   resetRound();
   gameState = "start";
   pauseBtn.textContent = "Pause Game";
-  showControlsPanel();
   instructionChip.textContent = "Big upward swings can turn doubles into triples. Home runs trigger a giant celebration.";
 }
 
@@ -1572,4 +1373,3 @@ updateSideButtons();
 updateHud();
 resizeCanvas();
 pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
-showControlsPanel();
