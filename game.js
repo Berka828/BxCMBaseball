@@ -11,7 +11,7 @@ const resetBtn = document.getElementById("resetBtn");
 const muteBtn = document.getElementById("muteBtn");
 const rightHandBtn = document.getElementById("rightHandBtn");
 const leftHandBtn = document.getElementById("leftHandBtn");
-const rightPanel = document.querySelector(".rightPanel");
+const controlsPanel = document.getElementById("controlsPanel");
 
 const scoreEl = document.getElementById("scoreEl");
 const pitchesEl = document.getElementById("pitchesEl");
@@ -50,9 +50,9 @@ let batVelocity = { x: 0, y: 0, speed: 0 };
 let ball = null;
 let hitText = "";
 let hitTextTimer = 0;
-let flashTimer = 0;
 let timingText = "";
 let timingTextTimer = 0;
+let flashTimer = 0;
 
 let confetti = [];
 let floatingStars = [];
@@ -62,12 +62,11 @@ let batTrail = [];
 
 let pitchTimer = null;
 let countdownTimer = null;
-let countdownActive = false;
 let countdownValue = 5;
+let countdownActive = false;
 
 let screenShakeTimer = 0;
 let screenShakeAmount = 0;
-
 let bgTick = 0;
 
 const BALL_RADIUS = 14;
@@ -150,9 +149,8 @@ function playHomeRunSound() {
   tone(1046.5, 0.20, "triangle", 0.12, 0.42);
 }
 
-function playCountdownBeep(num) {
-  const f = num > 1 ? 660 : 880;
-  tone(f, 0.10, "triangle", 0.11, 0);
+function playCountdownBeep(n) {
+  tone(n > 1 ? 660 : 880, 0.10, "triangle", 0.11, 0);
 }
 
 function playGoSound() {
@@ -199,17 +197,17 @@ function clearCountdownTimer() {
 }
 
 function showControlsPanel() {
-  if (!rightPanel) return;
-  rightPanel.style.transition = "opacity 500ms ease";
-  rightPanel.style.opacity = "1";
-  rightPanel.style.pointerEvents = "auto";
+  if (!controlsPanel) return;
+  controlsPanel.style.transition = "opacity 500ms ease";
+  controlsPanel.style.opacity = "1";
+  controlsPanel.style.pointerEvents = "auto";
 }
 
 function hideControlsPanel() {
-  if (!rightPanel) return;
-  rightPanel.style.transition = "opacity 700ms ease";
-  rightPanel.style.opacity = "0.08";
-  rightPanel.style.pointerEvents = "none";
+  if (!controlsPanel) return;
+  controlsPanel.style.transition = "opacity 700ms ease";
+  controlsPanel.style.opacity = "0.08";
+  controlsPanel.style.pointerEvents = "none";
 }
 
 function scheduleNextPitch() {
@@ -232,28 +230,35 @@ function scheduleNextPitch() {
 function resetRound() {
   clearPitchTimer();
   clearCountdownTimer();
+
   score = 0;
   hits = 0;
   misses = 0;
   bestExitVelo = 0;
   pitchesLeft = roundPitches;
+
   prevBatPoint = null;
   batVelocity = { x: 0, y: 0, speed: 0 };
   ball = null;
+
   hitText = "";
   hitTextTimer = 0;
   timingText = "";
   timingTextTimer = 0;
   flashTimer = 0;
+
   confetti = [];
   floatingStars = [];
   homerBursts = [];
   homerTrailParticles = [];
   batTrail = [];
+
   screenShakeTimer = 0;
   screenShakeAmount = 0;
-  countdownActive = false;
+
   countdownValue = 5;
+  countdownActive = false;
+
   updateHud();
   instructionChip.textContent = "Big upward swings can turn doubles into triples. Home runs trigger a giant celebration.";
   showControlsPanel();
@@ -348,7 +353,7 @@ function drawWindowScene(yTop, yBottom) {
   const usableW = canvas.width - pad * 2;
   const colW = usableW / cols;
 
-  const letters = [
+  const coloredPanels = [
     { color: "rgba(255,210,50,0.35)", x: 0.12, w: 0.14 },
     { color: "rgba(245,140,50,0.35)", x: 0.28, w: 0.16 },
     { color: "rgba(50,180,240,0.35)", x: 0.50, w: 0.16 },
@@ -356,12 +361,14 @@ function drawWindowScene(yTop, yBottom) {
     { color: "rgba(90,200,90,0.35)", x: 0.86, w: 0.14 }
   ];
 
-  for (const letter of letters) {
-    const lx = canvas.width * letter.x - (bgTick * 0.15 % (canvas.width * 0.02));
-    const ly = yTop + (yBottom - yTop) * 0.08;
-    const lw = canvas.width * letter.w;
-    const lh = (yBottom - yTop) * 0.85;
-    ctx.fillStyle = letter.color;
+  // big soft color blocks behind windows, inspired by the attached image
+  for (const p of coloredPanels) {
+    const drift = (bgTick * 0.10) % 18;
+    const lx = canvas.width * p.x - drift;
+    const ly = yTop + (yBottom - yTop) * 0.04;
+    const lw = canvas.width * p.w;
+    const lh = (yBottom - yTop) * 0.92;
+    ctx.fillStyle = p.color;
     drawRoundedRectPath(lx - lw * 0.5, ly, lw, lh, 24);
     ctx.fill();
   }
@@ -384,7 +391,7 @@ function drawWindowScene(yTop, yBottom) {
     ctx.fillStyle = winGrad;
     ctx.fillRect(ix, iy, iw, ih);
 
-    // glass reflections
+    // reflections
     ctx.strokeStyle = "rgba(255,255,255,0.20)";
     ctx.lineWidth = 8;
     ctx.beginPath();
@@ -392,7 +399,7 @@ function drawWindowScene(yTop, yBottom) {
     ctx.lineTo(ix + iw * 0.45, iy + ih);
     ctx.stroke();
 
-    // skyline
+    // skyline silhouettes
     ctx.fillStyle = "rgba(90,102,120,0.28)";
     const baseY = iy + ih;
     const drift = (bgTick * 0.12) % (iw * 0.4);
@@ -422,6 +429,7 @@ function drawFenceWall(yTop) {
   const wallY = yTop + canvas.height * 0.08;
   const wallH = canvas.height * 0.12;
 
+  // fence
   ctx.strokeStyle = "#5f6c7d";
   ctx.lineWidth = 2;
   const fenceDrift = (bgTick * 0.08) % 18;
@@ -447,42 +455,44 @@ function drawFenceWall(yTop) {
     ctx.stroke();
   }
 
+  // wall
   const wallGrad = ctx.createLinearGradient(0, wallY, 0, wallY + wallH);
   wallGrad.addColorStop(0, "#304d8a");
   wallGrad.addColorStop(1, "#223b71");
   ctx.fillStyle = wallGrad;
   ctx.fillRect(0, wallY, canvas.width, wallH);
 
+  // alternating NY / Players Alliance
   const sections = 10;
   const sectionW = canvas.width / sections;
   for (let i = 0; i < sections; i++) {
     const x = i * sectionW;
-    const centerX = x + sectionW / 2;
-    const centerY = wallY + wallH * 0.54;
+    const cx = x + sectionW / 2;
+    const cy = wallY + wallH * 0.54;
 
     if (i % 2 === 0) {
       ctx.fillStyle = "rgba(255,255,255,0.95)";
       ctx.font = `900 ${Math.max(18, canvas.width * 0.018)}px serif`;
       ctx.textAlign = "center";
-      ctx.fillText("NY", centerX, centerY);
+      ctx.fillText("NY", cx, cy);
     } else {
       const barW = Math.max(18, canvas.width * 0.010);
       const barH = 4;
 
       ctx.fillStyle = "#f4c542";
-      ctx.fillRect(centerX - 42, centerY - 13, barW, barH);
+      ctx.fillRect(cx - 42, cy - 13, barW, barH);
 
       ctx.fillStyle = "#ffffff";
-      ctx.fillRect(centerX - 42, centerY - 5, barW, barH);
+      ctx.fillRect(cx - 42, cy - 5, barW, barH);
 
       ctx.fillStyle = "#111111";
-      ctx.fillRect(centerX - 42, centerY + 3, barW, barH);
+      ctx.fillRect(cx - 42, cy + 3, barW, barH);
 
       ctx.fillStyle = "#ffffff";
       ctx.font = `700 ${Math.max(10, canvas.width * 0.010)}px sans-serif`;
       ctx.textAlign = "left";
-      ctx.fillText("PLAYERS", centerX - 18, centerY - 4);
-      ctx.fillText("ALLIANCE", centerX - 18, centerY + 10);
+      ctx.fillText("PLAYERS", cx - 18, cy - 4);
+      ctx.fillText("ALLIANCE", cx - 18, cy + 10);
     }
   }
 
@@ -525,6 +535,7 @@ function drawIndoorField() {
   ctx.lineTo(canvas.width * 0.94, canvas.height * 0.66);
   ctx.stroke();
 
+  // batter area left
   ctx.fillStyle = "#c97342";
   ctx.beginPath();
   ctx.moveTo(canvas.width * 0.00, canvas.height * 0.78);
@@ -564,6 +575,7 @@ function drawIndoorField() {
   ctx.closePath();
   ctx.fill();
 
+  // mound right
   ctx.fillStyle = "#c26b3d";
   ctx.beginPath();
   ctx.ellipse(canvas.width * 0.78, canvas.height * 0.86, canvas.width * 0.12, canvas.height * 0.08, -0.08, 0, Math.PI * 2);
@@ -610,7 +622,7 @@ function drawBackground() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
-// ---------- SKELETON SCALING ----------
+// ---------- SKELETON ----------
 function scalePoint(p, center, scale) {
   if (!p) return null;
   return {
@@ -628,23 +640,15 @@ function getPoseCenter(points) {
   };
 }
 
-// ---------- TIMING ----------
 function getTimingFeedback(batTip, ballObj) {
   const diff = batTip.x - ballObj.x;
-
-  if (Math.abs(diff) < 25) {
-    return { label: "PERFECT!", powerBonus: 1.15, direction: 1 };
-  }
-  if (diff < -25) {
-    return { label: "TOO EARLY", powerBonus: 0.85, direction: 1.2 };
-  }
+  if (Math.abs(diff) < 25) return { label: "PERFECT!", powerBonus: 1.15, direction: 1 };
+  if (diff < -25) return { label: "TOO EARLY", powerBonus: 0.85, direction: 1.2 };
   return { label: "TOO LATE", powerBonus: 0.85, direction: 0.8 };
 }
 
-// ---------- SKELETON / BAT ----------
 function drawStickBone(a, b, color, width = 6, glow = 8) {
   if (!a || !b) return;
-
   ctx.save();
   ctx.strokeStyle = color;
   ctx.lineWidth = width;
@@ -660,7 +664,6 @@ function drawStickBone(a, b, color, width = 6, glow = 8) {
 
 function drawStickJoint(p, radius = 5, color = "#ffffff", glow = 6) {
   if (!p) return;
-
   ctx.save();
   ctx.fillStyle = color;
   ctx.shadowBlur = glow;
@@ -701,9 +704,7 @@ function updateBatTrail(batTip) {
   if (!batTip) return;
 
   const strong = batVelocity.speed > 520;
-  const color = strong
-    ? { r: 255, g: 208, b: 70 }
-    : { r: 88, g: 225, b: 255 };
+  const color = strong ? { r: 255, g: 208, b: 70 } : { r: 88, g: 225, b: 255 };
 
   batTrail.push({
     x: batTip.x,
@@ -783,9 +784,7 @@ function drawStickFigure(pose) {
   if (hipMid && rk) drawStickBone(hipMid, rk, legColor, 6);
   if (rk && ra) drawStickBone(rk, ra, legColor, 6);
 
-  if (nose && shoulderMid) {
-    drawStickBone(shoulderMid, nose, headColor, 5);
-  }
+  if (nose && shoulderMid) drawStickBone(shoulderMid, nose, headColor, 5);
 
   if (nose && leye && reye) {
     const headR = Math.max(10, Math.abs(leye.x - reye.x) * 0.95);
@@ -879,7 +878,7 @@ function updateBatVelocity(point) {
   prevBatPoint = { ...point, t: now };
 }
 
-// ---------- BALL / HITS ----------
+// ---------- BALL / HIT ----------
 function createPitch() {
   if (pitchesLeft <= 0) return;
   if (gameState !== "playing") return;
@@ -915,65 +914,6 @@ function classifyHit(power, upwardSwing) {
   return { label: "FOUL TIP!", points: 8, confettiCount: 6, launchBoost: 0.54 };
 }
 
-function showHitText(text) {
-  hitText = text;
-  hitTextTimer = 34;
-  flashTimer = text.includes("HOME RUN!") ? 9 : 4;
-}
-
-function showTimingText(text) {
-  timingText = text;
-  timingTextTimer = 28;
-}
-
-function spawnConfetti(x, y, count) {
-  for (let i = 0; i < count; i++) {
-    confetti.push({
-      x,
-      y,
-      vx: (Math.random() - 0.5) * 9,
-      vy: -Math.random() * 8 - 1.5,
-      size: 4 + Math.random() * 7,
-      life: 22 + Math.random() * 24,
-      color: ["#ff5252", "#ffd54f", "#66bb6a", "#42a5f5", "#ab47bc", "#ff7043"][i % 6]
-    });
-  }
-}
-
-function spawnStars(x, y, label) {
-  const count = label === "HOME RUN!" ? 8 : 4;
-  for (let i = 0; i < count; i++) {
-    floatingStars.push({
-      x: x + (Math.random() - 0.5) * 20,
-      y: y + (Math.random() - 0.5) * 20,
-      vy: -1 - Math.random() * 1.2,
-      life: 24 + Math.random() * 10,
-      size: 10 + Math.random() * 10
-    });
-  }
-}
-
-function triggerHomeRunCelebration(x, y) {
-  screenShakeTimer = 28;
-  screenShakeAmount = 14;
-  flashTimer = 14;
-
-  for (let i = 0; i < 4; i++) {
-    homerBursts.push({
-      x: x + (Math.random() - 0.5) * 120,
-      y: y + (Math.random() - 0.5) * 80,
-      radius: 10,
-      life: 26 + i * 4,
-      color: ["#ffd54f", "#42a5f5", "#ff7043", "#66bb6a"][i % 4]
-    });
-  }
-
-  spawnConfetti(x, y, 100);
-  spawnStars(x, y, "HOME RUN!");
-  spawnStars(x + 80, y - 40, "HOME RUN!");
-  spawnStars(x - 80, y - 20, "HOME RUN!");
-}
-
 function tryHit(batTip) {
   if (!ball || !ball.active || ball.hit) return;
 
@@ -1002,17 +942,8 @@ function tryHit(batTip) {
   const baseVX = 9 + power * 8;
   const baseVY = -(4 + Math.max(0, upwardSwing) * 7 + power * 2.2);
 
-  ball.vx =
-    lateral *
-    baseVX *
-    result.launchBoost *
-    timing.direction +
-    (Math.random() - 0.5) * 1.4;
-
-  ball.vy =
-    baseVY * result.launchBoost +
-    (Math.random() - 0.5) * 1.0;
-
+  ball.vx = lateral * baseVX * result.launchBoost * timing.direction + (Math.random() - 0.5) * 1.4;
+  ball.vy = baseVY * result.launchBoost + (Math.random() - 0.5) * 1.0;
   ball.result = result.label;
 
   score += result.points;
@@ -1020,8 +951,11 @@ function tryHit(batTip) {
   bestExitVelo = Math.max(bestExitVelo, power * 100);
   pitchesLeft--;
 
-  showHitText(result.label);
-  showTimingText(timing.label);
+  hitText = result.label;
+  hitTextTimer = 34;
+  timingText = timing.label;
+  timingTextTimer = 28;
+  flashTimer = result.label === "HOME RUN!" ? 9 : 4;
 
   spawnConfetti(ball.x, ball.y, result.confettiCount);
   spawnStars(ball.x, ball.y, result.label);
@@ -1081,9 +1015,7 @@ function updateBall() {
     ball.trail.push({ x: ball.x, y: ball.y, a: 0.16 });
     if (ball.trail.length > 7) ball.trail.shift();
 
-    if (ball.x < -40) {
-      resolveMiss();
-    }
+    if (ball.x < -40) resolveMiss();
   } else {
     ball.vy += GRAVITY;
     ball.vx *= 0.992;
@@ -1190,6 +1122,54 @@ function drawMiniMap() {
 }
 
 // ---------- FX ----------
+function spawnConfetti(x, y, count) {
+  for (let i = 0; i < count; i++) {
+    confetti.push({
+      x,
+      y,
+      vx: (Math.random() - 0.5) * 9,
+      vy: -Math.random() * 8 - 1.5,
+      size: 4 + Math.random() * 7,
+      life: 22 + Math.random() * 24,
+      color: ["#ff5252", "#ffd54f", "#66bb6a", "#42a5f5", "#ab47bc", "#ff7043"][i % 6]
+    });
+  }
+}
+
+function spawnStars(x, y, label) {
+  const count = label === "HOME RUN!" ? 8 : 4;
+  for (let i = 0; i < count; i++) {
+    floatingStars.push({
+      x: x + (Math.random() - 0.5) * 20,
+      y: y + (Math.random() - 0.5) * 20,
+      vy: -1 - Math.random() * 1.2,
+      life: 24 + Math.random() * 10,
+      size: 10 + Math.random() * 10
+    });
+  }
+}
+
+function triggerHomeRunCelebration(x, y) {
+  screenShakeTimer = 28;
+  screenShakeAmount = 14;
+  flashTimer = 14;
+
+  for (let i = 0; i < 4; i++) {
+    homerBursts.push({
+      x: x + (Math.random() - 0.5) * 120,
+      y: y + (Math.random() - 0.5) * 80,
+      radius: 10,
+      life: 26 + i * 4,
+      color: ["#ffd54f", "#42a5f5", "#ff7043", "#66bb6a"][i % 4]
+    });
+  }
+
+  spawnConfetti(x, y, 100);
+  spawnStars(x, y, "HOME RUN!");
+  spawnStars(x + 80, y - 40, "HOME RUN!");
+  spawnStars(x - 80, y - 20, "HOME RUN!");
+}
+
 function updateAndDrawConfetti() {
   for (let i = confetti.length - 1; i >= 0; i--) {
     const p = confetti[i];
@@ -1210,7 +1190,6 @@ function drawStar(x, y, r, color) {
   ctx.translate(x, y);
   ctx.fillStyle = color;
   ctx.beginPath();
-
   for (let i = 0; i < 5; i++) {
     const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
     const sx = Math.cos(a) * r;
@@ -1220,7 +1199,6 @@ function drawStar(x, y, r, color) {
     const a2 = a + Math.PI / 5;
     ctx.lineTo(Math.cos(a2) * r * 0.45, Math.sin(a2) * r * 0.45);
   }
-
   ctx.closePath();
   ctx.fill();
   ctx.restore();
@@ -1279,11 +1257,9 @@ function updateAndDrawHomerTrailParticles() {
 function drawHitOverlay() {
   if (hitTextTimer > 0) {
     const scale = 1 + Math.sin((34 - hitTextTimer) * 0.3) * 0.08;
-
     ctx.save();
     ctx.translate(canvas.width / 2, canvas.height * 0.22);
     ctx.scale(scale, scale);
-
     ctx.textAlign = "center";
     ctx.lineWidth = 9;
     ctx.strokeStyle = "#14304b";
@@ -1292,7 +1268,6 @@ function drawHitOverlay() {
     ctx.strokeText(hitText, 0, 0);
     ctx.fillText(hitText, 0, 0);
     ctx.restore();
-
     hitTextTimer--;
   }
 
@@ -1311,7 +1286,6 @@ function drawHitOverlay() {
     ctx.strokeText(timingText, canvas.width / 2, canvas.height * 0.30);
     ctx.fillText(timingText, canvas.width / 2, canvas.height * 0.30);
     ctx.restore();
-
     timingTextTimer--;
   }
 
@@ -1512,21 +1486,10 @@ async function loop() {
 
   tickBatTrail();
 
-  if (gameState === "start") {
-    drawStartOverlay();
-  }
-
-  if (gameState === "countdown") {
-    drawCountdownOverlay();
-  }
-
-  if (gameState === "paused") {
-    drawPauseOverlay();
-  }
-
-  if (gameState === "end") {
-    drawEndOverlay();
-  }
+  if (gameState === "start") drawStartOverlay();
+  if (gameState === "countdown") drawCountdownOverlay();
+  if (gameState === "paused") drawPauseOverlay();
+  if (gameState === "end") drawEndOverlay();
 
   ctx.restore();
   animationId = requestAnimationFrame(loop);
@@ -1557,9 +1520,7 @@ async function startOrResumeGame() {
   playStartSound();
   startCountdown();
 
-  if (!animationId) {
-    loop();
-  }
+  if (!animationId) loop();
 }
 
 function togglePause() {
