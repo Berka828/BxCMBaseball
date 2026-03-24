@@ -28,6 +28,9 @@ const pitchSpeedVal = document.getElementById("pitchSpeedVal");
 const swingThresholdVal = document.getElementById("swingThresholdVal");
 const pitchDelayVal = document.getElementById("pitchDelayVal");
 
+// default reset between pitches = 3 seconds
+pitchDelaySlider.value = 3;
+
 pitchSpeedSlider.oninput = () => pitchSpeedVal.textContent = pitchSpeedSlider.value;
 swingThresholdSlider.oninput = () => swingThresholdVal.textContent = swingThresholdSlider.value;
 pitchDelaySlider.oninput = () => pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
@@ -68,6 +71,11 @@ let countdownActive = false;
 let screenShakeTimer = 0;
 let screenShakeAmount = 0;
 let bgTick = 0;
+
+let endControlsRevealAt = 0;
+let endControlsRevealed = false;
+let endFeedback = "";
+let gestureStartCooldownUntil = 0;
 
 const BALL_RADIUS = 14;
 const GRAVITY = 0.44;
@@ -209,14 +217,14 @@ function clearCountdownTimer() {
 
 function showControlsPanel() {
   if (!controlsPanel) return;
-  controlsPanel.style.transition = "opacity 500ms ease";
+  controlsPanel.style.transition = "opacity 0.7s ease";
   controlsPanel.style.opacity = "1";
   controlsPanel.style.pointerEvents = "auto";
 }
 
 function hideControlsPanel() {
   if (!controlsPanel) return;
-  controlsPanel.style.transition = "opacity 700ms ease";
+  controlsPanel.style.transition = "opacity 0.7s ease";
   controlsPanel.style.opacity = "0.08";
   controlsPanel.style.pointerEvents = "none";
 }
@@ -270,9 +278,38 @@ function resetRound() {
   countdownValue = 5;
   countdownActive = false;
 
+  endControlsRevealAt = 0;
+  endControlsRevealed = false;
+  endFeedback = "";
+
   updateHud();
-  instructionChip.textContent = "Big upward swings can turn doubles into triples. Home runs trigger a giant celebration.";
+  instructionChip.textContent = "Raise both hands, practice swing, or press Start to begin.";
   showControlsPanel();
+}
+
+function buildEndFeedback() {
+  if (hits >= 8 && bestExitVelo >= 220) {
+    return "Excellent round. Strong contact, great timing, and big power.";
+  }
+  if (hits >= 6) {
+    return "Nice work. You made solid contact and kept the bat moving well.";
+  }
+  if (bestExitVelo >= 220) {
+    return "Great power. Try adding even better timing for more strong hits.";
+  }
+  if (misses > hits) {
+    return "Keep your eyes on the ball and start your swing a little earlier.";
+  }
+  return "Good effort. Smooth swings and better timing will boost your score.";
+}
+
+function startEndSequence() {
+  gameState = "end";
+  endFeedback = buildEndFeedback();
+  endControlsRevealAt = performance.now() + 10000;
+  endControlsRevealed = false;
+  hideControlsPanel();
+  instructionChip.textContent = "Round over. Review your results on screen.";
 }
 
 // ---------- CAMERA / MODEL ----------
@@ -360,25 +397,33 @@ function drawRoofAndLights() {
 
 function drawColorfulBronxBranding(yTop, sceneH) {
   const letters = [
-    { ch: "B", color: "rgba(255,210,50,0.48)", x: 0.12 },
-    { ch: "R", color: "rgba(245,140,50,0.48)", x: 0.30 },
-    { ch: "O", color: "rgba(50,180,240,0.48)", x: 0.50 },
-    { ch: "N", color: "rgba(210,80,200,0.48)", x: 0.70 },
-    { ch: "X", color: "rgba(90,200,90,0.48)", x: 0.88 }
+    { ch: "B", color: "rgba(255,210,50,0.56)", x: 0.12 },
+    { ch: "R", color: "rgba(245,140,50,0.56)", x: 0.30 },
+    { ch: "O", color: "rgba(50,180,240,0.56)", x: 0.50 },
+    { ch: "N", color: "rgba(210,80,200,0.56)", x: 0.70 },
+    { ch: "X", color: "rgba(90,200,90,0.56)", x: 0.88 }
   ];
 
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.font = `900 ${Math.max(130, canvas.width * 0.17)}px "Baloo 2", sans-serif`;
 
   for (const l of letters) {
     const drift = Math.sin(bgTick * 0.01 + l.x * 4) * 5;
+    const x = canvas.width * l.x + drift;
+    const y = yTop + sceneH * 0.42;
+
+    // widen letters horizontally so they read clearly
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(1.45, 1);
+    ctx.font = `900 ${Math.max(130, canvas.width * 0.17)}px "Baloo 2", sans-serif`;
     ctx.fillStyle = l.color;
-    ctx.fillText(l.ch, canvas.width * l.x + drift, yTop + sceneH * 0.42);
+    ctx.fillText(l.ch, 0, 0);
+    ctx.restore();
   }
 
-  ctx.fillStyle = "rgba(74, 43, 143, 0.42)";
+  ctx.fillStyle = "rgba(74, 43, 143, 0.52)";
   ctx.font = `900 ${Math.max(26, canvas.width * 0.026)}px "Nunito", sans-serif`;
   ctx.fillText("CHILDREN'S MUSEUM", canvas.width * 0.5, yTop + sceneH * 0.76);
   ctx.restore();
@@ -391,13 +436,11 @@ function drawWindowScene(yTop, yBottom) {
   const colW = usableW / cols;
   const sceneH = yBottom - yTop;
 
-  // draw the colorful BRONX branding FIRST and then lay translucent windows on top
   drawColorfulBronxBranding(yTop, sceneH);
 
   for (let i = 0; i < cols; i++) {
     const x = pad + i * colW;
 
-    // outer frame
     ctx.fillStyle = "#51637a";
     ctx.fillRect(x, yTop, colW - 6, sceneH);
 
@@ -407,15 +450,13 @@ function drawWindowScene(yTop, yBottom) {
     const iw = colW - 6 - innerPad * 2;
     const ih = sceneH - innerPad * 2;
 
-    // more transparent glass so the BRONX branding actually shows through
     const winGrad = ctx.createLinearGradient(0, iy, 0, iy + ih);
-    winGrad.addColorStop(0, "rgba(238,247,255,0.48)");
-    winGrad.addColorStop(1, "rgba(216,231,240,0.36)");
+    winGrad.addColorStop(0, "rgba(238,247,255,0.34)");
+    winGrad.addColorStop(1, "rgba(216,231,240,0.24)");
     ctx.fillStyle = winGrad;
     ctx.fillRect(ix, iy, iw, ih);
 
-    // skyline silhouettes
-    ctx.fillStyle = "rgba(90,102,120,0.18)";
+    ctx.fillStyle = "rgba(90,102,120,0.14)";
     const baseY = iy + ih;
     const drift = (bgTick * 0.12) % (iw * 0.4);
     for (let b = -1; b < 5; b++) {
@@ -425,15 +466,13 @@ function drawWindowScene(yTop, yBottom) {
       ctx.fillRect(bx, baseY - bh, bw, bh);
     }
 
-    // reflections
-    ctx.strokeStyle = "rgba(255,255,255,0.14)";
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
     ctx.lineWidth = 7;
     ctx.beginPath();
     ctx.moveTo(ix + iw * 0.18, iy);
     ctx.lineTo(ix + iw * 0.46, iy + ih);
     ctx.stroke();
 
-    // mullions
     ctx.strokeStyle = "rgba(90,110,130,0.65)";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -454,7 +493,6 @@ function drawYankeesLogo(x, y, w, h) {
     return;
   }
 
-  // fallback
   ctx.fillStyle = "rgba(255,255,255,0.95)";
   ctx.font = `900 ${Math.max(18, w * 0.55)}px serif`;
   ctx.textAlign = "center";
@@ -508,7 +546,7 @@ function drawFenceWall(yTop) {
     const cy = wallY + wallH * 0.56;
 
     if (i % 2 === 0) {
-      const logoW = Math.min(sectionW * 0.46, 54);
+      const logoW = Math.min(sectionW * 0.48, 56);
       const logoH = logoW;
       drawYankeesLogo(cx - logoW / 2, cy - logoH / 2, logoW, logoH);
     } else {
@@ -644,503 +682,29 @@ function drawBackground() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
-// ---------- SKELETON ----------
-function scalePoint(p, center, scale) {
-  if (!p) return null;
-  return {
-    x: center.x + (p.x - center.x) * scale + SKELETON_OFFSET_X,
-    y: center.y + (p.y - center.y) * scale + SKELETON_OFFSET_Y
-  };
+// ---------- GESTURE START ----------
+function wristsAboveShoulders(pose) {
+  const lw = getKeypoint(pose, "left_wrist", 0.25);
+  const rw = getKeypoint(pose, "right_wrist", 0.25);
+  const ls = getKeypoint(pose, "left_shoulder", 0.25);
+  const rs = getKeypoint(pose, "right_shoulder", 0.25);
+
+  if (!lw || !rw || !ls || !rs) return false;
+  return lw.y < ls.y && rw.y < rs.y;
 }
 
-function getPoseCenter(points) {
-  const valid = points.filter(Boolean);
-  if (!valid.length) return null;
-  return {
-    x: valid.reduce((s, p) => s + p.x, 0) / valid.length,
-    y: valid.reduce((s, p) => s + p.y, 0) / valid.length
-  };
-}
+function tryGestureStart(pose) {
+  if (gameState !== "start") return;
+  if (countdownActive) return;
+  if (performance.now() < gestureStartCooldownUntil) return;
 
-function getTimingFeedback(batTip, ballObj) {
-  const diff = batTip.x - ballObj.x;
-  if (Math.abs(diff) < 25) return { label: "PERFECT!", powerBonus: 1.15, direction: 1 };
-  if (diff < -25) return { label: "TOO EARLY", powerBonus: 0.85, direction: 1.2 };
-  return { label: "TOO LATE", powerBonus: 0.85, direction: 0.8 };
-}
+  const handsUp = wristsAboveShoulders(pose);
+  const practiceSwing = batVelocity.speed > Math.max(parseFloat(swingThresholdSlider.value) * 0.85, 260);
 
-function drawStickBone(a, b, color, width = 6, glow = 8) {
-  if (!a || !b) return;
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.lineCap = "round";
-  ctx.shadowBlur = glow;
-  ctx.shadowColor = color;
-  ctx.beginPath();
-  ctx.moveTo(a.x, a.y);
-  ctx.lineTo(b.x, b.y);
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawStickJoint(p, radius = 5, color = "#ffffff", glow = 6) {
-  if (!p) return;
-  ctx.save();
-  ctx.fillStyle = color;
-  ctx.shadowBlur = glow;
-  ctx.shadowColor = color;
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
-function midPoint(a, b, t = 0.5) {
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-}
-
-function drawBatTrail() {
-  if (batTrail.length < 2) return;
-
-  for (let i = 1; i < batTrail.length; i++) {
-    const a = batTrail[i - 1];
-    const b = batTrail[i];
-    const alpha = i / batTrail.length;
-
-    ctx.save();
-    ctx.strokeStyle = `rgba(${a.color.r}, ${a.color.g}, ${a.color.b}, ${alpha * 0.55})`;
-    ctx.lineWidth = 4 + alpha * 8;
-    ctx.lineCap = "round";
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = `rgba(${a.color.r}, ${a.color.g}, ${a.color.b}, 0.8)`;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-    ctx.restore();
+  if (handsUp || practiceSwing) {
+    gestureStartCooldownUntil = performance.now() + 2500;
+    startCountdown();
   }
-}
-
-function updateBatTrail(batTip) {
-  if (!batTip) return;
-
-  const strong = batVelocity.speed > 520;
-  const color = strong ? { r: 255, g: 208, b: 70 } : { r: 88, g: 225, b: 255 };
-
-  batTrail.push({
-    x: batTip.x,
-    y: batTip.y,
-    life: 10,
-    color
-  });
-
-  if (batTrail.length > 12) batTrail.shift();
-}
-
-function tickBatTrail() {
-  for (let i = batTrail.length - 1; i >= 0; i--) {
-    batTrail[i].life--;
-    if (batTrail[i].life <= 0) batTrail.splice(i, 1);
-  }
-}
-
-function drawStickFigure(pose) {
-  let ls = getKeypoint(pose, "left_shoulder");
-  let rs = getKeypoint(pose, "right_shoulder");
-  let le = getKeypoint(pose, "left_elbow");
-  let re = getKeypoint(pose, "right_elbow");
-  let lw = getKeypoint(pose, "left_wrist");
-  let rw = getKeypoint(pose, "right_wrist");
-  let lh = getKeypoint(pose, "left_hip");
-  let rh = getKeypoint(pose, "right_hip");
-  let lk = getKeypoint(pose, "left_knee");
-  let rk = getKeypoint(pose, "right_knee");
-  let la = getKeypoint(pose, "left_ankle");
-  let ra = getKeypoint(pose, "right_ankle");
-  let nose = getKeypoint(pose, "nose");
-  let leye = getKeypoint(pose, "left_eye", 0.2);
-  let reye = getKeypoint(pose, "right_eye", 0.2);
-
-  const center = getPoseCenter([ls, rs, le, re, lw, rw, lh, rh, lk, rk, la, ra, nose]);
-  if (!center) return { rw: null, re: null, lw: null, le: null };
-
-  ls = scalePoint(ls, center, SKELETON_SCALE);
-  rs = scalePoint(rs, center, SKELETON_SCALE);
-  le = scalePoint(le, center, SKELETON_SCALE);
-  re = scalePoint(re, center, SKELETON_SCALE);
-  lw = scalePoint(lw, center, SKELETON_SCALE);
-  rw = scalePoint(rw, center, SKELETON_SCALE);
-  lh = scalePoint(lh, center, SKELETON_SCALE);
-  rh = scalePoint(rh, center, SKELETON_SCALE);
-  lk = scalePoint(lk, center, SKELETON_SCALE);
-  rk = scalePoint(rk, center, SKELETON_SCALE);
-  la = scalePoint(la, center, SKELETON_SCALE);
-  ra = scalePoint(ra, center, SKELETON_SCALE);
-  nose = scalePoint(nose, center, SKELETON_SCALE);
-  leye = scalePoint(leye, center, SKELETON_SCALE);
-  reye = scalePoint(reye, center, SKELETON_SCALE);
-
-  const armColor = "#58e1ff";
-  const legColor = "#8df55f";
-  const coreColor = "#ffd54f";
-  const headColor = "#ffb86c";
-
-  const shoulderMid = (ls && rs) ? midPoint(ls, rs, 0.5) : null;
-  const hipMid = (lh && rh) ? midPoint(lh, rh, 0.5) : null;
-
-  if (shoulderMid && hipMid) {
-    const shortHip = midPoint(shoulderMid, hipMid, 0.62);
-    drawStickBone(shoulderMid, shortHip, coreColor, 7);
-  }
-
-  if (ls && rs) drawStickBone(ls, rs, coreColor, 5);
-
-  drawStickBone(ls, le, armColor, 6);
-  drawStickBone(le, lw, armColor, 6);
-  drawStickBone(rs, re, armColor, 6);
-  drawStickBone(re, rw, armColor, 6);
-
-  if (hipMid && lk) drawStickBone(hipMid, lk, legColor, 6);
-  if (lk && la) drawStickBone(lk, la, legColor, 6);
-  if (hipMid && rk) drawStickBone(hipMid, rk, legColor, 6);
-  if (rk && ra) drawStickBone(rk, ra, legColor, 6);
-
-  if (nose && shoulderMid) drawStickBone(shoulderMid, nose, headColor, 5);
-
-  if (nose && leye && reye) {
-    const headR = Math.max(10, Math.abs(leye.x - reye.x) * 0.95);
-    ctx.save();
-    ctx.strokeStyle = headColor;
-    ctx.lineWidth = 4;
-    ctx.shadowBlur = 8;
-    ctx.shadowColor = headColor;
-    ctx.beginPath();
-    ctx.arc(nose.x, nose.y + 3, headR, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  [ls, rs, le, re, lw, rw, lk, rk, la, ra].forEach(p => drawStickJoint(p, 4, "#ffffff", 5));
-  if (shoulderMid) drawStickJoint(shoulderMid, 3, "#ffffff", 4);
-  if (hipMid) drawStickJoint(hipMid, 3, "#ffffff", 4);
-
-  return { rw, re, lw, le };
-}
-
-function getBattingArm(points) {
-  if (battingSide === "right") {
-    return (points.rw && points.re) ? { wrist: points.rw, elbow: points.re } : null;
-  }
-  return (points.lw && points.le) ? { wrist: points.lw, elbow: points.le } : null;
-}
-
-function drawBatFromSide(wrist, elbow) {
-  if (!wrist || !elbow) return null;
-
-  const dx = wrist.x - elbow.x;
-  const dy = wrist.y - elbow.y;
-  const len = Math.hypot(dx, dy) || 1;
-  const nx = dx / len;
-  const ny = dy / len;
-
-  const batTip = {
-    x: wrist.x + nx * BAT_LENGTH,
-    y: wrist.y + ny * BAT_LENGTH
-  };
-
-  const handleEnd = {
-    x: wrist.x - nx * 26,
-    y: wrist.y - ny * 26
-  };
-
-  ctx.save();
-  ctx.lineCap = "round";
-
-  ctx.strokeStyle = "#5d4037";
-  ctx.lineWidth = 14;
-  ctx.beginPath();
-  ctx.moveTo(handleEnd.x, handleEnd.y);
-  ctx.lineTo(batTip.x, batTip.y);
-  ctx.stroke();
-
-  ctx.strokeStyle = "#ffca28";
-  ctx.lineWidth = 8;
-  ctx.shadowBlur = 16;
-  ctx.shadowColor = "#ffca28";
-  ctx.beginPath();
-  ctx.moveTo(wrist.x, wrist.y);
-  ctx.lineTo(batTip.x, batTip.y);
-  ctx.stroke();
-
-  ctx.restore();
-
-  return batTip;
-}
-
-function updateBatVelocity(point) {
-  const now = performance.now();
-
-  if (!prevBatPoint) {
-    prevBatPoint = { ...point, t: now };
-    batVelocity = { x: 0, y: 0, speed: 0 };
-    return;
-  }
-
-  const dt = Math.max((now - prevBatPoint.t) / 1000, 0.001);
-  const vx = (point.x - prevBatPoint.x) / dt;
-  const vy = (point.y - prevBatPoint.y) / dt;
-
-  batVelocity = {
-    x: vx,
-    y: vy,
-    speed: Math.hypot(vx, vy)
-  };
-
-  prevBatPoint = { ...point, t: now };
-}
-
-// ---------- BALL ----------
-function createPitch() {
-  if (pitchesLeft <= 0) return;
-  if (gameState !== "playing") return;
-  if (ball) return;
-
-  ball = {
-    x: canvas.width + 30,
-    y: canvas.height * (0.62 + Math.random() * 0.06),
-    vx: -parseFloat(pitchSpeedSlider.value) - Math.random() * 1.2,
-    vy: (Math.random() - 0.5) * 0.18,
-    hit: false,
-    active: true,
-    trail: [],
-    result: ""
-  };
-
-  playPitchSound();
-}
-
-function classifyHit(power, upwardSwing) {
-  if (power > 1.9 && upwardSwing > 0.6) {
-    return { label: "HOME RUN!", points: 80, confettiCount: 42, launchBoost: 1.28 };
-  }
-  if (power > 1.5 && upwardSwing > 0.25) {
-    return { label: "TRIPLE!", points: 45, confettiCount: 24, launchBoost: 1.02 };
-  }
-  if (power > 1.08) {
-    return { label: "DOUBLE!", points: 28, confettiCount: 16, launchBoost: 0.88 };
-  }
-  if (power > 0.66) {
-    return { label: "SINGLE!", points: 16, confettiCount: 10, launchBoost: 0.72 };
-  }
-  return { label: "FOUL TIP!", points: 8, confettiCount: 6, launchBoost: 0.54 };
-}
-
-function tryHit(batTip) {
-  if (!ball || !ball.active || ball.hit) return;
-
-  const d = Math.hypot(ball.x - batTip.x, ball.y - batTip.y);
-  if (d > CONTACT_DISTANCE) return;
-  if (batVelocity.speed < parseFloat(swingThresholdSlider.value)) return;
-
-  ball.hit = true;
-
-  const timing = getTimingFeedback(batTip, ball);
-
-  let power = clamp(batVelocity.speed / 700, 0.35, 2.1);
-  power *= timing.powerBonus;
-
-  const upwardSwing = clamp((-batVelocity.y) / 700, -0.4, 1.0);
-
-  let lateral;
-  if (battingSide === "right") {
-    lateral = batVelocity.x >= 0 ? 1 : -1;
-  } else {
-    lateral = batVelocity.x <= 0 ? -1 : 1;
-  }
-
-  const result = classifyHit(power, upwardSwing);
-
-  const baseVX = 9 + power * 8;
-  const baseVY = -(4 + Math.max(0, upwardSwing) * 7 + power * 2.2);
-
-  ball.vx = lateral * baseVX * result.launchBoost * timing.direction + (Math.random() - 0.5) * 1.4;
-  ball.vy = baseVY * result.launchBoost + (Math.random() - 0.5) * 1.0;
-  ball.result = result.label;
-
-  score += result.points;
-  hits++;
-  bestExitVelo = Math.max(bestExitVelo, power * 100);
-  pitchesLeft--;
-
-  hitText = result.label;
-  hitTextTimer = 34;
-  timingText = timing.label;
-  timingTextTimer = 28;
-  flashTimer = result.label === "HOME RUN!" ? 9 : 4;
-
-  spawnConfetti(ball.x, ball.y, result.confettiCount);
-  spawnStars(ball.x, ball.y, result.label);
-  updateHud();
-
-  if (result.label === "HOME RUN!") {
-    playHomeRunSound();
-    triggerHomeRunCelebration(ball.x, ball.y);
-    instructionChip.textContent = "HOME RUN! PERFECT SWING!";
-  } else if (result.label === "TRIPLE!" || result.label === "DOUBLE!") {
-    playBigHitSound();
-    instructionChip.textContent = timing.label;
-  } else {
-    playHitSound();
-    instructionChip.textContent = timing.label;
-  }
-}
-
-function resolveMiss() {
-  misses++;
-  pitchesLeft--;
-  ball = null;
-  updateHud();
-  playMissSound();
-  instructionChip.textContent = "Miss! Reset and get ready.";
-  scheduleNextPitch();
-}
-
-function resolveFinishedHit() {
-  ball = null;
-  instructionChip.textContent = "Nice! Get ready for the next pitch.";
-  scheduleNextPitch();
-}
-
-function spawnHomeRunTrail() {
-  if (!ball || ball.result !== "HOME RUN!") return;
-
-  homerTrailParticles.push({
-    x: ball.x,
-    y: ball.y,
-    vx: (Math.random() - 0.5) * 1.5,
-    vy: (Math.random() - 0.5) * 1.5,
-    life: 18 + Math.random() * 8,
-    size: 4 + Math.random() * 5,
-    color: ["#ffd54f", "#ffffff", "#42a5f5", "#ff7043"][Math.floor(Math.random() * 4)]
-  });
-}
-
-function updateBall() {
-  if (!ball || !ball.active) return;
-  if (gameState !== "playing") return;
-
-  if (!ball.hit) {
-    ball.x += ball.vx;
-    ball.y += ball.vy;
-
-    ball.trail.push({ x: ball.x, y: ball.y, a: 0.16 });
-    if (ball.trail.length > 7) ball.trail.shift();
-
-    if (ball.x < -40) resolveMiss();
-  } else {
-    ball.vy += GRAVITY;
-    ball.vx *= 0.992;
-    ball.vy *= 0.996;
-
-    ball.x += ball.vx;
-    ball.y += ball.vy;
-
-    ball.trail.push({ x: ball.x, y: ball.y, a: 0.24 });
-    if (ball.trail.length > 16) ball.trail.shift();
-
-    if (ball.result === "HOME RUN!") {
-      spawnHomeRunTrail();
-      spawnHomeRunTrail();
-    }
-
-    if (ball.y > canvas.height + 60 || ball.x < -90 || ball.x > canvas.width + 90) {
-      resolveFinishedHit();
-    }
-  }
-}
-
-function drawBall() {
-  if (!ball || !ball.active) return;
-
-  for (let i = 0; i < ball.trail.length; i++) {
-    const p = ball.trail[i];
-    const alpha = ((i + 1) / ball.trail.length) * p.a;
-    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, BALL_RADIUS * 0.58, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.save();
-  ctx.shadowBlur = ball.result === "HOME RUN!" ? 24 : 14;
-  ctx.shadowColor = ball.result === "HOME RUN!" ? "#ffd54f" : "#ffffff";
-  ctx.fillStyle = "#ffffff";
-  ctx.beginPath();
-  ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.strokeStyle = "#cfd8dc";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(ball.x, ball.y, BALL_RADIUS - 2, 0.4, 2.4);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(ball.x, ball.y, BALL_RADIUS - 2, 3.6, 5.7);
-  ctx.stroke();
-  ctx.restore();
-}
-
-// ---------- MINIMAP ----------
-function drawMiniMap() {
-  miniCtx.clearRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
-
-  miniCtx.fillStyle = "#0b2343";
-  miniCtx.fillRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
-
-  miniCtx.strokeStyle = "rgba(255,255,255,0.18)";
-  miniCtx.lineWidth = 2;
-  miniCtx.strokeRect(1, 1, miniMapCanvas.width - 2, miniMapCanvas.height - 2);
-
-  miniCtx.fillStyle = "rgba(255,255,255,0.06)";
-  miniCtx.fillRect(18, 55, miniMapCanvas.width - 36, 40);
-
-  miniCtx.strokeStyle = "rgba(255,255,255,0.30)";
-  miniCtx.lineWidth = 4;
-  miniCtx.beginPath();
-  miniCtx.moveTo(miniMapCanvas.width - 24, 75);
-  miniCtx.lineTo(34, 75);
-  miniCtx.stroke();
-
-  miniCtx.fillStyle = "#ffffff";
-  miniCtx.beginPath();
-  miniCtx.moveTo(20, 75);
-  miniCtx.lineTo(28, 66);
-  miniCtx.lineTo(38, 75);
-  miniCtx.lineTo(34, 86);
-  miniCtx.lineTo(24, 86);
-  miniCtx.closePath();
-  miniCtx.fill();
-
-  miniCtx.fillStyle = "#ffd54f";
-  miniCtx.beginPath();
-  miniCtx.arc(miniMapCanvas.width - 24, 75, 7, 0, Math.PI * 2);
-  miniCtx.fill();
-
-  if (ball) {
-    const bx = clamp((ball.x / canvas.width) * miniMapCanvas.width, 10, miniMapCanvas.width - 10);
-    const by = clamp((ball.y / canvas.height) * miniMapCanvas.height, 18, miniMapCanvas.height - 18);
-
-    miniCtx.fillStyle = "#ffffff";
-    miniCtx.beginPath();
-    miniCtx.arc(bx, by, 7, 0, Math.PI * 2);
-    miniCtx.fill();
-  }
-
-  miniCtx.fillStyle = "#dbeaff";
-  miniCtx.font = '900 12px "Nunito", sans-serif';
-  miniCtx.textAlign = "left";
-  miniCtx.fillText(battingSide === "right" ? "Right-handed" : "Left-handed", 12, 18);
 }
 
 // ---------- FX ----------
@@ -1338,7 +902,7 @@ function drawPauseOverlay() {
 
   ctx.fillStyle = "#ffffff";
   ctx.font = '900 28px "Nunito", sans-serif';
-  ctx.fillText("Press Pause Game again to resume.", canvas.width / 2, canvas.height * 0.43);
+  ctx.fillText("Press Pause, Space, or Esc to resume.", canvas.width / 2, canvas.height * 0.43);
 }
 
 function drawStartOverlay() {
@@ -1348,12 +912,13 @@ function drawStartOverlay() {
   ctx.textAlign = "center";
   ctx.fillStyle = "#ffd54f";
   ctx.font = '900 60px "Baloo 2", sans-serif';
-  ctx.fillText("PRESS START", canvas.width / 2, canvas.height * 0.33);
+  ctx.fillText("PRESS START", canvas.width / 2, canvas.height * 0.31);
 
   ctx.fillStyle = "#ffffff";
-  ctx.font = '900 28px "Nunito", sans-serif';
-  ctx.fillText("Choose left or right handed play.", canvas.width / 2, canvas.height * 0.41);
-  ctx.fillText("The bat stays on that side until you change it.", canvas.width / 2, canvas.height * 0.47);
+  ctx.font = '900 26px "Nunito", sans-serif';
+  ctx.fillText("Choose left or right handed play.", canvas.width / 2, canvas.height * 0.39);
+  ctx.fillText("Raise both hands or do a practice swing to start too.", canvas.width / 2, canvas.height * 0.45);
+  ctx.fillText("Press Space or Esc anytime to pause.", canvas.width / 2, canvas.height * 0.51);
 }
 
 function drawEndOverlay() {
@@ -1363,12 +928,46 @@ function drawEndOverlay() {
   ctx.textAlign = "center";
   ctx.fillStyle = "#ffd54f";
   ctx.font = '900 56px "Baloo 2", sans-serif';
-  ctx.fillText("ROUND OVER!", canvas.width / 2, canvas.height * 0.34);
+  ctx.fillText("ROUND OVER!", canvas.width / 2, canvas.height * 0.31);
 
   ctx.fillStyle = "#ffffff";
   ctx.font = '900 28px "Nunito", sans-serif';
-  ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height * 0.43);
-  ctx.fillText(`Hits: ${hits}   |   Best EV: ${Math.round(bestExitVelo)}`, canvas.width / 2, canvas.height * 0.50);
+  ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height * 0.40);
+  ctx.fillText(`Hits: ${hits}   |   Misses: ${misses}   |   Best EV: ${Math.round(bestExitVelo)}`, canvas.width / 2, canvas.height * 0.47);
+
+  ctx.fillStyle = "#dfeaff";
+  ctx.font = '900 24px "Nunito", sans-serif';
+  wrapCenteredText(endFeedback, canvas.width / 2, canvas.height * 0.58, canvas.width * 0.62, 32);
+
+  const secondsLeft = Math.max(0, Math.ceil((endControlsRevealAt - performance.now()) / 1000));
+  if (!endControlsRevealed && secondsLeft > 0) {
+    ctx.fillStyle = "#ffffff";
+    ctx.font = '900 20px "Nunito", sans-serif';
+    ctx.fillText(`Controls return in ${secondsLeft}...`, canvas.width / 2, canvas.height * 0.71);
+  }
+}
+
+function wrapCenteredText(text, centerX, y, maxWidth, lineHeight) {
+  const words = text.split(" ");
+  let line = "";
+  const lines = [];
+
+  ctx.save();
+  for (let i = 0; i < words.length; i++) {
+    const test = line ? `${line} ${words[i]}` : words[i];
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = words[i];
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  ctx.restore();
+
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], centerX, y + i * lineHeight);
+  }
 }
 
 function drawCountdownOverlay() {
@@ -1460,7 +1059,7 @@ async function loop() {
 
   let pose = null;
 
-  if (detector && (gameState === "playing" || gameState === "countdown")) {
+  if (detector && ["start", "countdown", "playing"].includes(gameState)) {
     const poses = await detector.estimatePoses(video, { flipHorizontal: true });
     pose = poses[0] || null;
   }
@@ -1478,7 +1077,13 @@ async function loop() {
         if (gameState === "playing") {
           tryHit(batTip);
         }
+
+        if (gameState === "start") {
+          tryGestureStart(pose);
+        }
       }
+    } else if (gameState === "start") {
+      tryGestureStart(pose);
     }
   }
 
@@ -1494,9 +1099,7 @@ async function loop() {
     drawHitOverlay();
 
     if (pitchesLeft <= 0 && !ball) {
-      gameState = "end";
-      showControlsPanel();
-      instructionChip.textContent = "Round over. Press Start Game to play again.";
+      startEndSequence();
     }
   } else {
     updateAndDrawConfetti();
@@ -1504,6 +1107,12 @@ async function loop() {
     updateAndDrawHomerBursts();
     updateAndDrawHomerTrailParticles();
     drawHitOverlay();
+  }
+
+  if (gameState === "end" && !endControlsRevealed && performance.now() >= endControlsRevealAt) {
+    endControlsRevealed = true;
+    showControlsPanel();
+    instructionChip.textContent = "Round complete. Start a new game when ready.";
   }
 
   tickBatTrail();
@@ -1537,12 +1146,14 @@ async function startOrResumeGame() {
     return;
   }
 
-  resetRound();
-  pauseBtn.textContent = "Pause Game";
-  playStartSound();
-  startCountdown();
+  if (gameState === "start" || gameState === "end") {
+    resetRound();
+    pauseBtn.textContent = "Pause Game";
+    playStartSound();
+    startCountdown();
 
-  if (!animationId) loop();
+    if (!animationId) loop();
+  }
 }
 
 function togglePause() {
@@ -1588,7 +1199,7 @@ function resetGame() {
   gameState = "start";
   pauseBtn.textContent = "Pause Game";
   showControlsPanel();
-  instructionChip.textContent = "Big upward swings can turn doubles into triples. Home runs trigger a giant celebration.";
+  instructionChip.textContent = "Raise both hands, practice swing, or press Start to begin.";
 }
 
 startBtn.onclick = startOrResumeGame;
@@ -1607,8 +1218,19 @@ muteBtn.onclick = async () => {
   }
 };
 
+// keyboard pause / resume
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Space" || e.key === "Escape" || e.key === "Esc") {
+    e.preventDefault();
+    if (["playing", "paused", "countdown"].includes(gameState)) {
+      togglePause();
+    }
+  }
+});
+
 updateSideButtons();
 updateHud();
 resizeCanvas();
 pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
+instructionChip.textContent = "Raise both hands, practice swing, or press Start to begin.";
 showControlsPanel();
