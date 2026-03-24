@@ -354,12 +354,13 @@ function drawWindowScene(yTop, yBottom) {
   const colW = usableW / cols;
   const sceneH = yBottom - yTop;
 
+  // large colorful BxCM-inspired window branding
   const letters = [
-    { ch: "B", color: "rgba(255,210,50,0.32)", x: 0.11 },
-    { ch: "R", color: "rgba(245,140,50,0.32)", x: 0.29 },
-    { ch: "O", color: "rgba(50,180,240,0.32)", x: 0.50 },
-    { ch: "N", color: "rgba(210,80,200,0.32)", x: 0.70 },
-    { ch: "X", color: "rgba(90,200,90,0.32)", x: 0.88 }
+    { ch: "B", color: "rgba(255,210,50,0.28)", x: 0.12 },
+    { ch: "R", color: "rgba(245,140,50,0.28)", x: 0.29 },
+    { ch: "O", color: "rgba(50,180,240,0.28)", x: 0.50 },
+    { ch: "N", color: "rgba(210,80,200,0.28)", x: 0.70 },
+    { ch: "X", color: "rgba(90,200,90,0.28)", x: 0.88 }
   ];
 
   ctx.save();
@@ -370,8 +371,13 @@ function drawWindowScene(yTop, yBottom) {
   for (const l of letters) {
     const drift = Math.sin(bgTick * 0.01 + l.x * 4) * 6;
     ctx.fillStyle = l.color;
-    ctx.fillText(l.ch, canvas.width * l.x + drift, yTop + sceneH * 0.54);
+    ctx.fillText(l.ch, canvas.width * l.x + drift, yTop + sceneH * 0.45);
   }
+
+  // add museum wording across windows
+  ctx.fillStyle = "rgba(70, 40, 140, 0.22)";
+  ctx.font = `900 ${Math.max(26, canvas.width * 0.028)}px "Nunito", sans-serif`;
+  ctx.fillText("CHILDREN'S MUSEUM", canvas.width * 0.5, yTop + sceneH * 0.72);
   ctx.restore();
 
   for (let i = 0; i < cols; i++) {
@@ -387,12 +393,12 @@ function drawWindowScene(yTop, yBottom) {
     const ih = sceneH - innerPad * 2;
 
     const winGrad = ctx.createLinearGradient(0, iy, 0, iy + ih);
-    winGrad.addColorStop(0, "rgba(238,247,255,0.86)");
-    winGrad.addColorStop(1, "rgba(216,231,240,0.78)");
+    winGrad.addColorStop(0, "rgba(238,247,255,0.80)");
+    winGrad.addColorStop(1, "rgba(216,231,240,0.72)");
     ctx.fillStyle = winGrad;
     ctx.fillRect(ix, iy, iw, ih);
 
-    ctx.fillStyle = "rgba(90,102,120,0.22)";
+    ctx.fillStyle = "rgba(90,102,120,0.20)";
     const baseY = iy + ih;
     const drift = (bgTick * 0.12) % (iw * 0.4);
     for (let b = -1; b < 5; b++) {
