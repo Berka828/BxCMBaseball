@@ -1,341 +1,391 @@
 :root {
-  --navy: #0c2343;
-  --navy-2: #112d57;
-  --panel: rgba(10, 27, 55, 0.88);
-  --panel-border: rgba(255, 255, 255, 0.14);
-  --gold: #ffd54f;
-  --white: #ffffff;
-  --text-soft: rgba(255, 255, 255, 0.84);
-  --orange: #ff8a5b;
-  --blue: #4aa3ff;
-  --btn-dark: #4d617e;
+  --panel: rgba(10, 22, 44, 0.82);
+  --line: rgba(255,255,255,0.22);
+  --shadow: 0 14px 34px rgba(0,0,0,0.28);
+  --yellow: #ffd54f;
+  --bx-yellow: #ffcc00;
+  --bx-orange: #f58220;
+  --bx-blue: #1ea8e0;
+  --bx-purple: #a82b93;
+  --bx-green: #46a038;
 }
 
 * {
   box-sizing: border-box;
 }
 
-html,
-body {
+html, body {
   margin: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #07162c;
-  font-family: "Nunito", sans-serif;
+  background: #081a33;
+  font-family: "Nunito", Arial, sans-serif;
 }
 
 body {
-  color: var(--white);
+  position: fixed;
+  inset: 0;
 }
 
-.appShell {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
+.stageWrap {
+  position: fixed;
+  inset: 0;
   overflow: hidden;
-  background: #07162c;
+  background: #081a33;
 }
 
-#video {
+video,
+canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+video {
   opacity: 0;
   pointer-events: none;
 }
 
-#canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
 .overlay {
   position: absolute;
-  background: var(--panel);
-  border: 2px solid var(--panel-border);
-  border-radius: 22px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28);
-  backdrop-filter: blur(6px);
+  z-index: 20;
 }
 
-.topRow {
-  position: absolute;
+.topBar {
   top: 16px;
   left: 16px;
   right: 16px;
-  height: 92px;
-  z-index: 20;
+  display: grid;
+  grid-template-columns: 320px 1fr 180px;
+  gap: 14px;
+  align-items: stretch;
 }
 
-.logoPanel {
-  left: 0;
-  top: 0;
-  width: 195px;
-  height: 92px;
-  padding: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-#bxcmLogo {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-}
-
-.titlePanel {
-  left: 208px;
-  right: 208px;
-  top: 0;
-  height: 92px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.titlePanel h1 {
-  margin: 0;
-  font-family: "Baloo 2", sans-serif;
-  font-size: 2.1rem;
-  line-height: 1;
-  color: var(--gold);
-  letter-spacing: 0.02em;
-}
-
-.titlePanel p {
-  margin: 2px 0 0 0;
-  font-size: 1rem;
-  font-weight: 800;
-  color: var(--text-soft);
-}
-
-.scorePanel {
-  top: 0;
-  right: 0;
-  width: 160px;
-  height: 92px;
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8px;
-}
-
-.scoreStat {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.scoreStat span {
-  font-size: 0.95rem;
-  font-weight: 800;
-  color: var(--white);
-}
-
-.scoreStat strong {
-  font-size: 1.2rem;
-  font-weight: 900;
-  color: var(--gold);
-}
-
-.leftStats {
-  position: absolute;
-  top: 110px;
+.leftHud {
+  top: 106px;
   left: 16px;
-  z-index: 20;
-  display: flex;
-  flex-direction: column;
+  width: 132px;
+  display: grid;
   gap: 10px;
 }
 
-.statBox {
-  width: 106px;
-  min-height: 86px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 4px;
-}
-
-.statBox span {
-  font-size: 0.9rem;
-  font-weight: 900;
-  color: var(--white);
-}
-
-.statBox strong {
-  font-size: 2rem;
-  line-height: 1;
-  font-weight: 900;
-  color: var(--white);
+.rightPanel {
+  top: 106px;
+  right: 16px;
+  width: 290px;
 }
 
 .miniMapWrap {
   left: 16px;
-  top: 472px;
-  width: 220px;
-  height: 130px;
-  padding: 8px;
-  z-index: 20;
+  top: 460px;
+  width: 264px;
 }
 
-.miniMapLabel {
-  font-size: 0.9rem;
-  font-weight: 900;
-  color: var(--white);
-  margin: 0 0 4px 2px;
-}
-
-#miniMapCanvas {
-  width: 100%;
-  height: calc(100% - 24px);
-  border-radius: 14px;
-  display: block;
-}
-
-.instructionChip {
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
-  min-width: 520px;
-  max-width: 72vw;
-  padding: 12px 22px;
-  text-align: center;
-  font-size: 1rem;
-  font-weight: 900;
-  z-index: 20;
-}
-
-.rightPanel {
-  top: 108px;
-  right: 16px;
-  width: 260px;
-  padding: 16px;
-  z-index: 20;
-}
-
-#controlsPanel {
-  transition: opacity 0.7s ease;
-}
-
-.rightPanel h2 {
-  margin: 0 0 12px 0;
-  font-family: "Baloo 2", sans-serif;
-  font-size: 1.8rem;
-  line-height: 1;
-  color: var(--gold);
-}
-
-.ctaBtn,
-.toggleBtn {
-  border: 0;
-  border-radius: 18px;
-  font-family: "Nunito", sans-serif;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.ctaBtn {
-  width: 100%;
-  padding: 14px 16px;
-  margin-bottom: 10px;
-  font-size: 1.1rem;
-  color: var(--white);
-}
-
-.primaryBtn {
-  background: linear-gradient(180deg, #ff9b6b, #ff7f52);
-}
-
-.secondaryBtn {
-  background: linear-gradient(180deg, #617895, #4a5e79);
-}
-
-.soundBtn {
-  background: linear-gradient(180deg, #53b1ff, #2d8ef0);
-}
-
-.controlGroup {
-  margin-top: 12px;
-}
-
-.controlGroup label {
-  display: block;
-  font-size: 1rem;
-  font-weight: 900;
-  color: var(--white);
-  margin-bottom: 8px;
-}
-
-.sideToggle {
+.bottomBar {
+  left: 170px;
+  right: 310px;
+  bottom: 16px;
   display: flex;
-  gap: 10px;
+  justify-content: center;
 }
 
-.toggleBtn {
-  flex: 1;
-  padding: 12px 10px;
-  font-size: 1.1rem;
-  background: linear-gradient(180deg, #5d728d, #485c77);
-  color: var(--white);
+.brandChip,
+.titleChip,
+.scoreChip,
+.hudCard,
+.panelCard,
+.instructionChip,
+.miniMapCard {
+  background: var(--panel);
+  border: 2px solid var(--line);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+  border-radius: 22px;
 }
 
-.toggleBtn.active {
-  background: linear-gradient(180deg, #ffd24d, #f7b91d);
-  color: #10233e;
+.brandChip {
+  min-height: 96px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.sliderHeader {
+.brandLogo {
+  width: 100%;
+  max-width: 290px;
+  max-height: 76px;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+
+.titleChip {
+  min-height: 78px;
+  padding: 10px 20px;
+  text-align: center;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.titleMain {
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-size: 38px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--yellow);
+  text-shadow: 0 4px 0 rgba(0,0,0,0.22);
+}
+
+.titleSub {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #e3f0ff;
+}
+
+.scoreChip {
+  min-height: 78px;
+  padding: 10px 14px;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.scoreLine {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.scoreLine + .scoreLine {
+  margin-top: 8px;
+}
+
+.scoreLine strong {
+  font-size: 28px;
+  color: var(--yellow);
+  font-family: "Baloo 2", system-ui, sans-serif;
+  line-height: 1;
+}
+
+.hudCard {
+  padding: 10px;
+  color: white;
+  text-align: center;
+  border-width: 3px;
+}
+
+.hudYellow {
+  background: linear-gradient(180deg, rgba(255, 204, 0, 0.22), rgba(10, 22, 44, 0.90));
+  border-color: rgba(255, 204, 0, 0.70);
+}
+
+.hudPurple {
+  background: linear-gradient(180deg, rgba(168, 43, 147, 0.24), rgba(10, 22, 44, 0.90));
+  border-color: rgba(168, 43, 147, 0.70);
+}
+
+.hudBlue {
+  background: linear-gradient(180deg, rgba(30, 168, 224, 0.24), rgba(10, 22, 44, 0.90));
+  border-color: rgba(30, 168, 224, 0.70);
+}
+
+.hudLabel {
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #ffffff;
+}
+
+.hudValue {
+  margin-top: 4px;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 900;
+  font-family: "Baloo 2", system-ui, sans-serif;
+}
+
+.hudYellow .hudValue {
+  color: var(--bx-yellow);
+}
+
+.hudPurple .hudValue {
+  color: #d95ac5;
+}
+
+.hudBlue .hudValue {
+  color: #4fc3ff;
+}
+
+.panelCard {
+  padding: 14px;
+  color: white;
+}
+
+.panelTitle,
+.miniMapTitle {
+  font-family: "Baloo 2", system-ui, sans-serif;
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 800;
+  color: var(--yellow);
+  margin-bottom: 10px;
+}
+
+button,
+input[type="range"] {
+  width: 100%;
+}
+
+button {
+  border: none;
+  border-radius: 16px;
+  padding: 12px 14px;
+  font-size: 17px;
+  font-weight: 900;
+  font-family: "Baloo 2", system-ui, sans-serif;
+  cursor: pointer;
+  color: white;
+  background: linear-gradient(180deg, #ff9d76, #ff7043);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.18);
+  margin-bottom: 8px;
+}
+
+button.secondary {
+  background: linear-gradient(180deg, #5a6d85, #405164);
+}
+
+button.blueBtn {
+  background: linear-gradient(180deg, #5ab8ff, #2f8ef5);
+}
+
+.controlGroup {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.controlLabel {
+  font-size: 14px;
+  font-weight: 900;
+  color: #e8f3ff;
   margin-bottom: 6px;
 }
 
-.sliderHeader span {
-  font-size: 1rem;
-  font-weight: 900;
-  color: var(--white);
+.sideToggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.sideBtn {
+  margin-bottom: 0;
+  background: linear-gradient(180deg, #5a6d85, #405164);
+}
+
+.sideBtn.active {
+  background: linear-gradient(180deg, #ffcf68, #ffb300);
+  color: #17324d;
+}
+
+.sliderWrap {
+  margin-top: 10px;
+}
+
+.sliderWrap label {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  color: #e8f3ff;
 }
 
 input[type="range"] {
+  accent-color: var(--yellow);
+}
+
+.tiny {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 700;
+  color: #dbeaff;
+}
+
+.instructionChip {
+  padding: 12px 18px;
+  color: white;
+  font-weight: 900;
+  text-align: center;
   width: 100%;
-  accent-color: var(--gold);
-  cursor: pointer;
+  max-width: 760px;
+  font-size: 14px;
 }
 
-.helpText {
-  margin-top: 12px;
-  font-size: 0.95rem;
-  line-height: 1.35;
-  font-weight: 800;
-  color: var(--text-soft);
+.miniMapCard {
+  padding: 10px;
+  width: 264px;
 }
 
-@media (max-width: 1200px) {
-  .titlePanel h1 {
-    font-size: 1.7rem;
+#miniMapCanvas {
+  width: 240px;
+  height: 150px;
+  display: block;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.05);
+}
+
+@media (max-width: 1280px) {
+  .topBar {
+    grid-template-columns: 260px 1fr 160px;
   }
 
-  .titlePanel p {
-    font-size: 0.9rem;
+  .brandLogo {
+    max-width: 230px;
+    max-height: 68px;
   }
 
-  .instructionChip {
-    min-width: 420px;
-    font-size: 0.92rem;
+  .leftHud {
+    width: 118px;
+  }
+
+  .rightPanel {
+    width: 270px;
+  }
+
+  .bottomBar {
+    left: 155px;
+    right: 286px;
+  }
+
+  .miniMapWrap {
+    width: 236px;
+  }
+
+  .miniMapCard {
+    width: 236px;
+  }
+
+  #miniMapCanvas {
+    width: 212px;
+    height: 132px;
+  }
+}
+
+@media (max-height: 820px) {
+  .miniMapWrap {
+    top: 400px;
   }
 }
