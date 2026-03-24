@@ -11,6 +11,7 @@ const resetBtn = document.getElementById("resetBtn");
 const muteBtn = document.getElementById("muteBtn");
 const rightHandBtn = document.getElementById("rightHandBtn");
 const leftHandBtn = document.getElementById("leftHandBtn");
+const rightPanel = document.querySelector(".rightPanel");
 
 const scoreEl = document.getElementById("scoreEl");
 const pitchesEl = document.getElementById("pitchesEl");
@@ -33,7 +34,7 @@ pitchDelaySlider.oninput = () => pitchDelayVal.textContent = `${pitchDelaySlider
 
 let detector = null;
 let animationId = null;
-let gameState = "start";
+let gameState = "start"; // start | countdown | playing | paused | end
 let battingSide = "right";
 
 let score = 0;
@@ -53,14 +54,24 @@ let flashTimer = 0;
 let confetti = [];
 let floatingStars = [];
 let homerBursts = [];
+let homerTrailParticles = [];
+let batTrail = [];
 let pitchTimer = null;
 let screenShakeTimer = 0;
 let screenShakeAmount = 0;
+
+let countdownActive = false;
+let countdownValue = 5;
+let countdownTimer = null;
 
 const BALL_RADIUS = 14;
 const GRAVITY = 0.44;
 const CONTACT_DISTANCE = 68;
 const BAT_LENGTH = 132;
+
+const SKELETON_SCALE = 0.68;
+const SKELETON_OFFSET_Y = 100;
+const SKELETON_OFFSET_X = 0;
 
 // ---------- AUDIO ----------
 let audioCtx = null;
@@ -134,6 +145,16 @@ function playHomeRunSound() {
   tone(1046.5, 0.20, "triangle", 0.12, 0.42);
 }
 
+function playCountdownBeep(num) {
+  const f = num > 1 ? 660 : 880;
+  tone(f, 0.10, "triangle", 0.11, 0);
+}
+
+function playGoSound() {
+  tone(880, 0.08, "triangle", 0.12, 0);
+  tone(1174.66, 0.12, "triangle", 0.12, 0.08);
+}
+
 // ---------- HELPERS ----------
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
@@ -166,6 +187,27 @@ function clearPitchTimer() {
   }
 }
 
+function clearCountdownTimer() {
+  if (countdownTimer) {
+    clearTimeout(countdownTimer);
+    countdownTimer = null;
+  }
+}
+
+function showControlsPanel() {
+  if (!rightPanel) return;
+  rightPanel.style.transition = "opacity 500ms ease";
+  rightPanel.style.opacity = "1";
+  rightPanel.style.pointerEvents = "auto";
+}
+
+function hideControlsPanel() {
+  if (!rightPanel) return;
+  rightPanel.style.transition = "opacity 700ms ease";
+  rightPanel.style.opacity = "0.08";
+  rightPanel.style.pointerEvents = "none";
+}
+
 function scheduleNextPitch() {
   clearPitchTimer();
 
@@ -185,6 +227,7 @@ function scheduleNextPitch() {
 
 function resetRound() {
   clearPitchTimer();
+  clearCountdownTimer();
   score = 0;
   hits = 0;
   misses = 0;
@@ -199,10 +242,15 @@ function resetRound() {
   confetti = [];
   floatingStars = [];
   homerBursts = [];
+  homerTrailParticles = [];
+  batTrail = [];
   screenShakeTimer = 0;
   screenShakeAmount = 0;
+  countdownActive = false;
+  countdownValue = 5;
   updateHud();
   instructionChip.textContent = "Big upward swings can turn doubles into triples. Home runs trigger a giant celebration.";
+  showControlsPanel();
 }
 
 // ---------- CAMERA / MODEL ----------
@@ -236,7 +284,7 @@ async function loadModel() {
   );
 }
 
-// ---------- CODE-DRAWN INDOOR STADIUM BACKGROUND ----------
+// ---------- BACKGROUND ----------
 function drawRoundedRectPath(x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -245,17 +293,6 @@ function drawRoundedRectPath(x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r);
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
-}
-
-function drawCloudSoft(x, y, s) {
-  ctx.save();
-  ctx.fillStyle = "rgba(255,255,255,0.55)";
-  ctx.beginPath();
-  ctx.arc(x, y, 18 * s, 0, Math.PI * 2);
-  ctx.arc(x + 22 * s, y - 8 * s, 14 * s, 0, Math.PI * 2);
-  ctx.arc(x + 42 * s, y, 18 * s, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
 }
 
 function drawInteriorWindows(yTop, yBottom) {
@@ -294,7 +331,6 @@ function drawInteriorWindows(yTop, yBottom) {
     ctx.lineTo(ix + iw, iy + ih * 0.52);
     ctx.stroke();
 
-    // skyline silhouettes in window
     ctx.fillStyle = "rgba(90,102,120,0.28)";
     const baseY = iy + ih;
     for (let b = 0; b < 4; b++) {
@@ -357,7 +393,6 @@ function drawScoreboardCenter() {
   const boardW = canvas.width * 0.20;
   const boardH = canvas.height * 0.18;
 
-  // top NY emblem
   ctx.save();
   ctx.fillStyle = "#243b73";
   drawRoundedRectPath(cx - boardW * 0.16, top - 10, boardW * 0.32, boardH * 0.25, 18);
@@ -371,7 +406,6 @@ function drawScoreboardCenter() {
   ctx.textAlign = "center";
   ctx.fillText("NY", cx, top + boardH * 0.13);
 
-  // main board
   const bodyY = top + boardH * 0.18;
   ctx.fillStyle = "#223a73";
   drawRoundedRectPath(cx - boardW / 2, bodyY, boardW, boardH, 18);
@@ -380,7 +414,6 @@ function drawScoreboardCenter() {
   ctx.lineWidth = 5;
   ctx.stroke();
 
-  // inner text panels
   ctx.fillStyle = "#102446";
   drawRoundedRectPath(cx - boardW * 0.42, bodyY + boardH * 0.10, boardW * 0.84, boardH * 0.34, 12);
   ctx.fill();
@@ -402,7 +435,6 @@ function drawScoreboardCenter() {
   ctx.font = `900 ${Math.max(14, canvas.width * 0.014)}px "Nunito", sans-serif`;
   ctx.fillText("HOME RUN ZONE", cx, bodyY + boardH * 0.705);
 
-  // side circles
   function circleBadge(x, y, r) {
     ctx.fillStyle = "#f0f5ff";
     ctx.beginPath();
@@ -420,7 +452,6 @@ function drawScoreboardCenter() {
   circleBadge(cx - boardW * 0.52, bodyY + boardH * 0.48, boardW * 0.10);
   circleBadge(cx + boardW * 0.34, bodyY + boardH * 0.35, boardW * 0.06);
 
-  // base cabinet
   ctx.fillStyle = "#1d2f4f";
   drawRoundedRectPath(cx - boardW * 0.20, bodyY + boardH * 0.82, boardW * 0.40, boardH * 0.40, 10);
   ctx.fill();
@@ -435,7 +466,6 @@ function drawFenceWall(yTop) {
   const wallY = yTop + canvas.height * 0.08;
   const wallH = canvas.height * 0.12;
 
-  // fence
   ctx.strokeStyle = "#5f6c7d";
   ctx.lineWidth = 2;
   for (let x = 0; x < canvas.width; x += 18) {
@@ -450,7 +480,6 @@ function drawFenceWall(yTop) {
     ctx.stroke();
   }
 
-  // fence posts
   for (let x = 0; x < canvas.width; x += canvas.width / 10) {
     ctx.strokeStyle = "#445365";
     ctx.lineWidth = 4;
@@ -460,7 +489,6 @@ function drawFenceWall(yTop) {
     ctx.stroke();
   }
 
-  // wall
   const wallGrad = ctx.createLinearGradient(0, wallY, 0, wallY + wallH);
   wallGrad.addColorStop(0, "#304d8a");
   wallGrad.addColorStop(1, "#223b71");
@@ -487,21 +515,18 @@ function drawFenceWall(yTop) {
 function drawIndoorField() {
   const fieldTop = canvas.height * 0.60;
 
-  // turf
   const turfGrad = ctx.createLinearGradient(0, fieldTop, 0, canvas.height);
   turfGrad.addColorStop(0, "#65b84f");
   turfGrad.addColorStop(1, "#4d9c3e");
   ctx.fillStyle = turfGrad;
   ctx.fillRect(0, fieldTop, canvas.width, canvas.height - fieldTop);
 
-  // turf stripes
   const stripeH = (canvas.height - fieldTop) / 6;
   for (let i = 0; i < 6; i++) {
     ctx.fillStyle = i % 2 === 0 ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)";
     ctx.fillRect(0, fieldTop + i * stripeH, canvas.width, stripeH);
   }
 
-  // perspective white lane lines
   ctx.strokeStyle = "rgba(255,255,255,0.55)";
   ctx.lineWidth = 4;
   ctx.beginPath();
@@ -514,7 +539,6 @@ function drawIndoorField() {
   ctx.lineTo(canvas.width * 0.94, canvas.height * 0.66);
   ctx.stroke();
 
-  // batter area left
   ctx.fillStyle = "#c97342";
   ctx.beginPath();
   ctx.moveTo(canvas.width * 0.00, canvas.height * 0.78);
@@ -524,7 +548,6 @@ function drawIndoorField() {
   ctx.closePath();
   ctx.fill();
 
-  // batter box
   ctx.strokeStyle = "#ffffff";
   ctx.lineWidth = 4;
   ctx.beginPath();
@@ -543,7 +566,6 @@ function drawIndoorField() {
   ctx.closePath();
   ctx.stroke();
 
-  // plate
   const px = canvas.width * 0.12;
   const py = canvas.height * 0.87;
   ctx.fillStyle = "#ffffff";
@@ -556,7 +578,6 @@ function drawIndoorField() {
   ctx.closePath();
   ctx.fill();
 
-  // mound on right
   ctx.fillStyle = "#c26b3d";
   ctx.beginPath();
   ctx.ellipse(canvas.width * 0.78, canvas.height * 0.86, canvas.width * 0.12, canvas.height * 0.08, -0.08, 0, Math.PI * 2);
@@ -572,7 +593,6 @@ function drawIndoorField() {
   ctx.closePath();
   ctx.fill();
 
-  // center field text, subtle
   ctx.save();
   ctx.translate(canvas.width * 0.52, canvas.height * 0.70);
   ctx.rotate(-0.03);
@@ -596,7 +616,6 @@ function drawBackground() {
   drawFenceWall(canvas.height * 0.48);
   drawIndoorField();
 
-  // faint haze
   const haze = ctx.createLinearGradient(0, 0, 0, canvas.height);
   haze.addColorStop(0, "rgba(255,255,255,0.06)");
   haze.addColorStop(1, "rgba(0,0,0,0.06)");
@@ -604,30 +623,22 @@ function drawBackground() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
-// ---------- STAND GUIDE ----------
-function drawStandGuide() {
-  const x = canvas.width * 0.18;
-  const y = canvas.height * 0.90;
-  const rx = canvas.width * 0.055;
-  const ry = canvas.height * 0.030;
+// ---------- SKELETON SCALING ----------
+function scalePoint(p, center, scale) {
+  if (!p) return null;
+  return {
+    x: center.x + (p.x - center.x) * scale + SKELETON_OFFSET_X,
+    y: center.y + (p.y - center.y) * scale + SKELETON_OFFSET_Y
+  };
+}
 
-  ctx.save();
-  ctx.strokeStyle = "rgba(255, 213, 79, 0.95)";
-  ctx.fillStyle = "rgba(255, 213, 79, 0.14)";
-  ctx.lineWidth = 5;
-  ctx.setLineDash([14, 10]);
-
-  ctx.beginPath();
-  ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.setLineDash([]);
-  ctx.fillStyle = "#ffd54f";
-  ctx.font = '900 20px "Baloo 2", sans-serif';
-  ctx.textAlign = "center";
-  ctx.fillText("STAND HERE", x, y + 6);
-  ctx.restore();
+function getPoseCenter(points) {
+  const valid = points.filter(Boolean);
+  if (!valid.length) return null;
+  return {
+    x: valid.reduce((s, p) => s + p.x, 0) / valid.length,
+    y: valid.reduce((s, p) => s + p.y, 0) / valid.length
+  };
 }
 
 // ---------- SHORTER STICK FIGURE / SINGLE TORSO LINE ----------
@@ -664,22 +675,88 @@ function midPoint(a, b, t = 0.5) {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 
+function drawBatTrail() {
+  if (batTrail.length < 2) return;
+
+  for (let i = 1; i < batTrail.length; i++) {
+    const a = batTrail[i - 1];
+    const b = batTrail[i];
+    const alpha = i / batTrail.length;
+
+    ctx.save();
+    ctx.strokeStyle = `rgba(${a.color.r}, ${a.color.g}, ${a.color.b}, ${alpha * 0.55})`;
+    ctx.lineWidth = 4 + alpha * 8;
+    ctx.lineCap = "round";
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = `rgba(${a.color.r}, ${a.color.g}, ${a.color.b}, 0.8)`;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function updateBatTrail(batTip) {
+  if (!batTip) return;
+
+  const strong = batVelocity.speed > 520;
+  const color = strong
+    ? { r: 255, g: 208, b: 70 }
+    : { r: 88, g: 225, b: 255 };
+
+  batTrail.push({
+    x: batTip.x,
+    y: batTip.y,
+    life: 10,
+    color
+  });
+
+  if (batTrail.length > 12) batTrail.shift();
+}
+
+function tickBatTrail() {
+  for (let i = batTrail.length - 1; i >= 0; i--) {
+    batTrail[i].life--;
+    if (batTrail[i].life <= 0) batTrail.splice(i, 1);
+  }
+}
+
 function drawStickFigure(pose) {
-  const ls = getKeypoint(pose, "left_shoulder");
-  const rs = getKeypoint(pose, "right_shoulder");
-  const le = getKeypoint(pose, "left_elbow");
-  const re = getKeypoint(pose, "right_elbow");
-  const lw = getKeypoint(pose, "left_wrist");
-  const rw = getKeypoint(pose, "right_wrist");
-  const lh = getKeypoint(pose, "left_hip");
-  const rh = getKeypoint(pose, "right_hip");
-  const lk = getKeypoint(pose, "left_knee");
-  const rk = getKeypoint(pose, "right_knee");
-  const la = getKeypoint(pose, "left_ankle");
-  const ra = getKeypoint(pose, "right_ankle");
-  const nose = getKeypoint(pose, "nose");
-  const leye = getKeypoint(pose, "left_eye", 0.2);
-  const reye = getKeypoint(pose, "right_eye", 0.2);
+  let ls = getKeypoint(pose, "left_shoulder");
+  let rs = getKeypoint(pose, "right_shoulder");
+  let le = getKeypoint(pose, "left_elbow");
+  let re = getKeypoint(pose, "right_elbow");
+  let lw = getKeypoint(pose, "left_wrist");
+  let rw = getKeypoint(pose, "right_wrist");
+  let lh = getKeypoint(pose, "left_hip");
+  let rh = getKeypoint(pose, "right_hip");
+  let lk = getKeypoint(pose, "left_knee");
+  let rk = getKeypoint(pose, "right_knee");
+  let la = getKeypoint(pose, "left_ankle");
+  let ra = getKeypoint(pose, "right_ankle");
+  let nose = getKeypoint(pose, "nose");
+  let leye = getKeypoint(pose, "left_eye", 0.2);
+  let reye = getKeypoint(pose, "right_eye", 0.2);
+
+  const center = getPoseCenter([ls, rs, le, re, lw, rw, lh, rh, lk, rk, la, ra, nose]);
+  if (!center) return { rw: null, re: null, lw: null, le: null };
+
+  ls = scalePoint(ls, center, SKELETON_SCALE);
+  rs = scalePoint(rs, center, SKELETON_SCALE);
+  le = scalePoint(le, center, SKELETON_SCALE);
+  re = scalePoint(re, center, SKELETON_SCALE);
+  lw = scalePoint(lw, center, SKELETON_SCALE);
+  rw = scalePoint(rw, center, SKELETON_SCALE);
+  lh = scalePoint(lh, center, SKELETON_SCALE);
+  rh = scalePoint(rh, center, SKELETON_SCALE);
+  lk = scalePoint(lk, center, SKELETON_SCALE);
+  rk = scalePoint(rk, center, SKELETON_SCALE);
+  la = scalePoint(la, center, SKELETON_SCALE);
+  ra = scalePoint(ra, center, SKELETON_SCALE);
+  nose = scalePoint(nose, center, SKELETON_SCALE);
+  leye = scalePoint(leye, center, SKELETON_SCALE);
+  reye = scalePoint(reye, center, SKELETON_SCALE);
 
   const armColor = "#58e1ff";
   const legColor = "#8df55f";
@@ -689,13 +766,11 @@ function drawStickFigure(pose) {
   const shoulderMid = (ls && rs) ? midPoint(ls, rs, 0.5) : null;
   const hipMid = (lh && rh) ? midPoint(lh, rh, 0.5) : null;
 
-  // shorter torso - single line only
   if (shoulderMid && hipMid) {
-    const shortHip = midPoint(shoulderMid, hipMid, 0.72);
+    const shortHip = midPoint(shoulderMid, hipMid, 0.62);
     drawStickBone(shoulderMid, shortHip, coreColor, 7);
   }
 
-  // small shoulder line only
   if (ls && rs) drawStickBone(ls, rs, coreColor, 5);
 
   drawStickBone(ls, le, armColor, 6);
@@ -703,7 +778,6 @@ function drawStickFigure(pose) {
   drawStickBone(rs, re, armColor, 6);
   drawStickBone(re, rw, armColor, 6);
 
-  // legs start from hip mid / shorter pelvis feel
   if (hipMid && lk) drawStickBone(hipMid, lk, legColor, 6);
   if (lk && la) drawStickBone(lk, la, legColor, 6);
   if (hipMid && rk) drawStickBone(hipMid, rk, legColor, 6);
@@ -714,14 +788,14 @@ function drawStickFigure(pose) {
   }
 
   if (nose && leye && reye) {
-    const headR = Math.max(12, Math.abs(leye.x - reye.x) * 1.0);
+    const headR = Math.max(10, Math.abs(leye.x - reye.x) * 0.95);
     ctx.save();
     ctx.strokeStyle = headColor;
     ctx.lineWidth = 4;
     ctx.shadowBlur = 8;
     ctx.shadowColor = headColor;
     ctx.beginPath();
-    ctx.arc(nose.x, nose.y + 4, headR, 0, Math.PI * 2);
+    ctx.arc(nose.x, nose.y + 3, headR, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
@@ -813,7 +887,7 @@ function createPitch() {
 
   ball = {
     x: canvas.width + 30,
-    y: canvas.height * (0.70 + Math.random() * 0.08),
+    y: canvas.height * (0.62 + Math.random() * 0.06),
     vx: -parseFloat(pitchSpeedSlider.value) - Math.random() * 1.2,
     vy: (Math.random() - 0.5) * 0.18,
     hit: false,
@@ -929,6 +1003,20 @@ function resolveFinishedHit() {
   scheduleNextPitch();
 }
 
+function spawnHomeRunTrail() {
+  if (!ball || ball.result !== "HOME RUN!") return;
+
+  homerTrailParticles.push({
+    x: ball.x,
+    y: ball.y,
+    vx: (Math.random() - 0.5) * 1.5,
+    vy: (Math.random() - 0.5) * 1.5,
+    life: 18 + Math.random() * 8,
+    size: 4 + Math.random() * 5,
+    color: ["#ffd54f", "#ffffff", "#42a5f5", "#ff7043"][Math.floor(Math.random() * 4)]
+  });
+}
+
 function updateBall() {
   if (!ball || !ball.active) return;
   if (gameState !== "playing") return;
@@ -954,6 +1042,11 @@ function updateBall() {
     ball.trail.push({ x: ball.x, y: ball.y, a: 0.24 });
     if (ball.trail.length > 16) ball.trail.shift();
 
+    if (ball.result === "HOME RUN!") {
+      spawnHomeRunTrail();
+      spawnHomeRunTrail();
+    }
+
     if (ball.y > canvas.height + 60 || ball.x < -90 || ball.x > canvas.width + 90) {
       resolveFinishedHit();
     }
@@ -973,8 +1066,8 @@ function drawBall() {
   }
 
   ctx.save();
-  ctx.shadowBlur = 14;
-  ctx.shadowColor = "#ffffff";
+  ctx.shadowBlur = ball.result === "HOME RUN!" ? 24 : 14;
+  ctx.shadowColor = ball.result === "HOME RUN!" ? "#ffd54f" : "#ffffff";
   ctx.fillStyle = "#ffffff";
   ctx.beginPath();
   ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
@@ -1142,6 +1235,27 @@ function updateAndDrawHomerBursts() {
   }
 }
 
+function updateAndDrawHomerTrailParticles() {
+  for (let i = homerTrailParticles.length - 1; i >= 0; i--) {
+    const p = homerTrailParticles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(p.life / 24, 0);
+    ctx.fillStyle = p.color;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    if (p.life <= 0) homerTrailParticles.splice(i, 1);
+  }
+}
+
 function drawHitOverlay() {
   if (hitTextTimer > 0) {
     const scale = 1 + Math.sin((34 - hitTextTimer) * 0.3) * 0.08;
@@ -1225,6 +1339,59 @@ function drawEndOverlay() {
   ctx.fillText(`Hits: ${hits}   |   Best EV: ${Math.round(bestExitVelo)}`, canvas.width / 2, canvas.height * 0.50);
 }
 
+function drawCountdownOverlay() {
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffd54f";
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = "#14304b";
+
+  if (countdownValue > 0) {
+    ctx.font = '900 120px "Baloo 2", sans-serif';
+    ctx.strokeText(String(countdownValue), canvas.width / 2, canvas.height * 0.45);
+    ctx.fillText(String(countdownValue), canvas.width / 2, canvas.height * 0.45);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = '900 28px "Nunito", sans-serif';
+    ctx.fillText("Get set...", canvas.width / 2, canvas.height * 0.55);
+  } else {
+    ctx.font = '900 90px "Baloo 2", sans-serif';
+    ctx.strokeText("SWING!", canvas.width / 2, canvas.height * 0.45);
+    ctx.fillText("SWING!", canvas.width / 2, canvas.height * 0.45);
+  }
+}
+
+// ---------- COUNTDOWN ----------
+function startCountdown() {
+  clearCountdownTimer();
+  countdownActive = true;
+  countdownValue = 5;
+  gameState = "countdown";
+  instructionChip.textContent = "Get set...";
+  hideControlsPanel();
+
+  const tick = () => {
+    if (!countdownActive) return;
+
+    if (countdownValue > 0) {
+      playCountdownBeep(countdownValue);
+      instructionChip.textContent = `Starting in ${countdownValue}...`;
+      countdownValue--;
+      countdownTimer = setTimeout(tick, 1000);
+    } else {
+      playGoSound();
+      instructionChip.textContent = "Swing!";
+      countdownActive = false;
+      gameState = "playing";
+      createPitch();
+    }
+  };
+
+  tick();
+}
+
 // ---------- SIDE SELECT ----------
 function updateSideButtons() {
   if (battingSide === "right") {
@@ -1257,50 +1424,64 @@ async function loop() {
   ctx.translate(shake.x, shake.y);
 
   drawBackground();
-  drawStandGuide();
   drawMiniMap();
 
   let pose = null;
 
-  if (detector && gameState === "playing") {
+  if (detector && (gameState === "playing" || gameState === "countdown")) {
     const poses = await detector.estimatePoses(video, { flipHorizontal: true });
     pose = poses[0] || null;
   }
 
-  if (gameState === "playing") {
-    if (pose) {
-      const points = drawStickFigure(pose);
-      const battingArm = getBattingArm(points);
+  if (pose) {
+    const points = drawStickFigure(pose);
+    const battingArm = getBattingArm(points);
 
-      if (battingArm) {
-        const batTip = drawBatFromSide(battingArm.wrist, battingArm.elbow);
-        if (batTip) {
-          updateBatVelocity(batTip);
+    if (battingArm) {
+      const batTip = drawBatFromSide(battingArm.wrist, battingArm.elbow);
+      if (batTip) {
+        updateBatVelocity(batTip);
+        updateBatTrail(batTip);
+
+        if (gameState === "playing") {
           tryHit(batTip);
         }
       }
     }
+  }
 
+  drawBatTrail();
+
+  if (gameState === "playing") {
     updateBall();
     drawBall();
     updateAndDrawConfetti();
     updateAndDrawStars();
     updateAndDrawHomerBursts();
+    updateAndDrawHomerTrailParticles();
     drawHitOverlay();
 
     if (pitchesLeft <= 0 && !ball) {
       gameState = "end";
+      showControlsPanel();
       instructionChip.textContent = "Round over. Press Start Game to play again.";
     }
   } else {
     updateAndDrawConfetti();
     updateAndDrawStars();
     updateAndDrawHomerBursts();
+    updateAndDrawHomerTrailParticles();
     drawHitOverlay();
   }
 
+  tickBatTrail();
+
   if (gameState === "start") {
     drawStartOverlay();
+  }
+
+  if (gameState === "countdown") {
+    drawCountdownOverlay();
   }
 
   if (gameState === "paused") {
@@ -1328,6 +1509,7 @@ async function startOrResumeGame() {
     gameState = "playing";
     pauseBtn.textContent = "Pause Game";
     instructionChip.textContent = "Game resumed.";
+    hideControlsPanel();
     if (!ball) scheduleNextPitch();
     playStartSound();
     if (!animationId) loop();
@@ -1335,11 +1517,9 @@ async function startOrResumeGame() {
   }
 
   resetRound();
-  gameState = "playing";
   pauseBtn.textContent = "Pause Game";
-  instructionChip.textContent = "Get ready...";
-  scheduleNextPitch();
   playStartSound();
+  startCountdown();
 
   if (!animationId) {
     loop();
@@ -1351,24 +1531,44 @@ function togglePause() {
     gameState = "paused";
     pauseBtn.textContent = "Resume Game";
     clearPitchTimer();
+    clearCountdownTimer();
+    showControlsPanel();
+    instructionChip.textContent = "Game paused.";
+    return;
+  }
+
+  if (gameState === "countdown") {
+    gameState = "paused";
+    countdownActive = false;
+    clearCountdownTimer();
+    pauseBtn.textContent = "Resume Game";
+    showControlsPanel();
     instructionChip.textContent = "Game paused.";
     return;
   }
 
   if (gameState === "paused") {
-    gameState = "playing";
     pauseBtn.textContent = "Pause Game";
-    instructionChip.textContent = "Game resumed.";
-    if (!ball) scheduleNextPitch();
-    playStartSound();
+
+    if (!ball && hits === 0 && misses === 0 && pitchesLeft === roundPitches) {
+      startCountdown();
+    } else {
+      gameState = "playing";
+      hideControlsPanel();
+      instructionChip.textContent = "Game resumed.";
+      if (!ball) scheduleNextPitch();
+      playStartSound();
+    }
   }
 }
 
 function resetGame() {
   clearPitchTimer();
+  clearCountdownTimer();
   resetRound();
   gameState = "start";
   pauseBtn.textContent = "Pause Game";
+  showControlsPanel();
   instructionChip.textContent = "Big upward swings can turn doubles into triples. Home runs trigger a giant celebration.";
 }
 
@@ -1392,3 +1592,4 @@ updateSideButtons();
 updateHud();
 resizeCanvas();
 pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
+showControlsPanel();
