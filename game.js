@@ -255,7 +255,7 @@ function resetRound() {
   countdownActive = false;
   countdownValue = 5;
   updateHud();
-  instructionChip.textContent = "Big upward swings can turn doubles into triples. Home runs trigger a giant celebration.";
+  instructionChip.textContent = "Big upward swings can turn doubles into triples. Home runs trigger a giant celebration!";
   showControlsPanel();
 }
 
