@@ -28,21 +28,22 @@ const pitchSpeedVal = document.getElementById("pitchSpeedVal");
 const swingThresholdVal = document.getElementById("swingThresholdVal");
 const pitchDelayVal = document.getElementById("pitchDelayVal");
 
+// safer defaults
 pitchDelaySlider.value = "3";
-pitchPitchSetup();
+pitchDelayVal.textContent = "3s";
 
-function pitchPitchSetup() {
-  pitchSpeedSlider.oninput = () => pitchSpeedVal.textContent = pitchSpeedSlider.value;
-  swingThresholdSlider.oninput = () => swingThresholdVal.textContent = swingThresholdSlider.value;
-  pitchDelaySlider.oninput = () => pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
-  pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
-}
+pitchSpeedSlider.oninput = () => pitchSpeedVal.textContent = pitchSpeedSlider.value;
+swingThresholdSlider.oninput = () => swingThresholdVal.textContent = swingThresholdSlider.value;
+pitchDelaySlider.oninput = () => pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
 
 let detector = null;
-let animationId = null;
 let cameraReady = false;
 let modelReady = false;
-let trackingEnabled = false;
+
+let poseLoopRunning = false;
+let renderLoopRunning = false;
+
+let latestPose = null;
 
 let gameState = "start"; // start | countdown | playing | paused | end
 let battingSide = "right";
@@ -58,7 +59,6 @@ let prevBatPoint = null;
 let batVelocity = { x: 0, y: 0, speed: 0 };
 
 let ball = null;
-let poseCache = null;
 
 let hitText = "";
 let hitTextTimer = 0;
@@ -94,19 +94,12 @@ const SKELETON_SCALE = 0.68;
 const SKELETON_OFFSET_Y = 100;
 const SKELETON_OFFSET_X = 0;
 
-// ---------- IMAGE ASSETS ----------
+// ---------- IMAGE ----------
 const backgroundImg = new Image();
 let backgroundReady = false;
 backgroundImg.onload = () => { backgroundReady = true; };
 backgroundImg.onerror = () => { backgroundReady = false; };
 backgroundImg.src = "stadium-bg.png";
-
-// optional Yankees wall logo if you still want it elsewhere later
-const yankeesLogoImg = new Image();
-let yankeesLogoReady = false;
-yankeesLogoImg.onload = () => { yankeesLogoReady = true; };
-yankeesLogoImg.onerror = () => { yankeesLogoReady = false; };
-yankeesLogoImg.src = "yankees-logo.png";
 
 // ---------- AUDIO ----------
 let audioCtx = null;
@@ -125,6 +118,7 @@ function initAudio() {
 
 function tone(freq, duration, type = "sine", gainValue = 0.12, startTime = 0) {
   if (!soundEnabled || !audioCtx) return;
+
   const now = audioCtx.currentTime + startTime;
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
@@ -236,22 +230,6 @@ function hideControlsPanel() {
   controlsPanel.style.pointerEvents = "none";
 }
 
-function scheduleNextPitch() {
-  clearPitchTimer();
-  if (pitchesLeft <= 0) return;
-  if (gameState !== "playing") return;
-
-  const delayMs = Math.round(parseFloat(pitchDelaySlider.value) * 1000);
-  instructionChip.textContent = "Get ready for the next pitch...";
-
-  pitchTimer = setTimeout(() => {
-    if (gameState === "playing" && !ball) {
-      createPitch();
-      instructionChip.textContent = "Swing across your body to meet the ball.";
-    }
-  }, delayMs);
-}
-
 function buildEndFeedback() {
   if (hits >= 8 && bestExitVelo >= 220) return "Excellent round. Strong contact, smart timing, and big power.";
   if (hits >= 6) return "Nice work. You made lots of contact and stayed active through the round.";
@@ -273,7 +251,6 @@ function resetRound() {
   prevBatPoint = null;
   batVelocity = { x: 0, y: 0, speed: 0 };
   ball = null;
-  poseCache = null;
 
   hitText = "";
   hitTextTimer = 0;
@@ -339,8 +316,38 @@ async function ensureTrackingReady() {
     );
     modelReady = true;
   }
+}
 
-  trackingEnabled = true;
+function startPoseLoop() {
+  if (poseLoopRunning) return;
+  poseLoopRunning = true;
+
+  const updatePose = async () => {
+    if (cameraReady && modelReady && detector) {
+      try {
+        const poses = await detector.estimatePoses(video, { flipHorizontal: true });
+        latestPose = poses[0] || null;
+      } catch (e) {
+        // keep previous pose
+      }
+    }
+
+    requestAnimationFrame(updatePose);
+  };
+
+  requestAnimationFrame(updatePose);
+}
+
+function startRenderLoop() {
+  if (renderLoopRunning) return;
+  renderLoopRunning = true;
+
+  const frame = () => {
+    renderGame();
+    requestAnimationFrame(frame);
+  };
+
+  requestAnimationFrame(frame);
 }
 
 // ---------- BACKGROUND ----------
@@ -365,15 +372,7 @@ function drawFallbackBackground() {
 
   ctx.fillStyle = "#c26b3d";
   ctx.beginPath();
-  ctx.ellipse(
-    canvas.width * 0.78,
-    canvas.height * 0.88,
-    canvas.width * 0.12,
-    canvas.height * 0.08,
-    -0.08,
-    0,
-    Math.PI * 2
-  );
+  ctx.ellipse(canvas.width * 0.78, canvas.height * 0.88, canvas.width * 0.12, canvas.height * 0.08, -0.08, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -582,8 +581,6 @@ function drawStickFigure(pose) {
   }
 
   [ls, rs, le, re, lw, rw, lk, rk, la, ra].forEach(p => drawStickJoint(p, 4, "#ffffff", 5));
-  if (shoulderMid) drawStickJoint(shoulderMid, 3, "#ffffff", 4);
-  if (hipMid) drawStickJoint(hipMid, 3, "#ffffff", 4);
 
   return { rw, re, lw, le, ls, rs };
 }
@@ -681,7 +678,7 @@ function updateBatVelocity(point) {
   prevBatPoint = { ...point, t: now };
 }
 
-// ---------- HIT ----------
+// ---------- BALL ----------
 function getTimingFeedback(batTip, ballObj) {
   const diff = batTip.x - ballObj.x;
   if (Math.abs(diff) < 25) return { label: "PERFECT!", powerBonus: 1.15, direction: 1 };
@@ -1069,88 +1066,7 @@ function drawCountdownOverlay() {
   }
 }
 
-// ---------- MAIN LOOP ----------
-async function renderFrame() {
-  const shake = getShakeOffset();
-
-  if (trackingEnabled && modelReady && detector && cameraReady) {
-    try {
-      const poses = await detector.estimatePoses(video, { flipHorizontal: true });
-      poseCache = poses[0] || null;
-    } catch (e) {
-      // keep last poseCache
-    }
-  }
-
-  ctx.save();
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.translate(shake.x, shake.y);
-
-  drawBackground();
-  drawMiniMap();
-
-  if (poseCache) {
-    const points = drawStickFigure(poseCache);
-    const battingArm = getBattingArm(points);
-
-    if (battingArm) {
-      const batTip = drawBatFromSide(battingArm.wrist, battingArm.elbow);
-      if (batTip) {
-        updateBatVelocity(batTip);
-        updateBatTrail(batTip);
-
-        if (gameState === "playing") {
-          tryHit(batTip);
-        }
-      }
-    }
-
-    if (gameState === "start") {
-      tryGestureStart(poseCache);
-    }
-  }
-
-  drawBatTrail();
-
-  if (gameState === "playing") {
-    updateBall();
-    drawBall();
-    updateAndDrawConfetti();
-    updateAndDrawStars();
-    updateAndDrawHomerBursts();
-    updateAndDrawHomerTrailParticles();
-    drawHitOverlay();
-
-    if (pitchesLeft <= 0 && !ball) {
-      startEndSequence();
-    }
-  } else {
-    drawBall();
-    updateAndDrawConfetti();
-    updateAndDrawStars();
-    updateAndDrawHomerBursts();
-    updateAndDrawHomerTrailParticles();
-    drawHitOverlay();
-  }
-
-  if (gameState === "end" && !controlsReturnedAfterEnd && performance.now() >= endHoldUntil) {
-    controlsReturnedAfterEnd = true;
-    showControlsPanel();
-    instructionChip.textContent = "Round complete. Start a new game when ready.";
-  }
-
-  tickBatTrail();
-
-  if (gameState === "start") drawStartOverlay();
-  if (gameState === "countdown") drawCountdownOverlay();
-  if (gameState === "paused") drawPauseOverlay();
-  if (gameState === "end") drawEndOverlay();
-
-  ctx.restore();
-  animationId = requestAnimationFrame(renderFrame);
-}
-
-// ---------- CONTROLS ----------
+// ---------- GAME FLOW ----------
 function startCountdown() {
   clearCountdownTimer();
   countdownActive = true;
@@ -1217,10 +1133,8 @@ function togglePause() {
 async function startOrResumeGame() {
   initAudio();
   await ensureTrackingReady();
-
-  if (!animationId) {
-    renderFrame();
-  }
+  startPoseLoop();
+  startRenderLoop();
 
   if (gameState === "paused") {
     gameState = "playing";
@@ -1250,6 +1164,78 @@ function resetGame() {
   showControlsPanel();
 }
 
+// ---------- RENDER ----------
+function renderGame() {
+  const shake = getShakeOffset();
+
+  ctx.save();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.translate(shake.x, shake.y);
+
+  drawBackground();
+  drawMiniMap();
+
+  if (latestPose) {
+    const points = drawStickFigure(latestPose);
+    const battingArm = getBattingArm(points);
+
+    if (battingArm) {
+      const batTip = drawBatFromSide(battingArm.wrist, battingArm.elbow);
+      if (batTip) {
+        updateBatVelocity(batTip);
+        updateBatTrail(batTip);
+
+        if (gameState === "playing") {
+          tryHit(batTip);
+        }
+      }
+    }
+
+    if (gameState === "start") {
+      tryGestureStart(latestPose);
+    }
+  }
+
+  drawBatTrail();
+
+  if (gameState === "playing") {
+    updateBall();
+    drawBall();
+    updateAndDrawConfetti();
+    updateAndDrawStars();
+    updateAndDrawHomerBursts();
+    updateAndDrawHomerTrailParticles();
+    drawHitOverlay();
+
+    if (pitchesLeft <= 0 && !ball) {
+      startEndSequence();
+    }
+  } else {
+    drawBall();
+    updateAndDrawConfetti();
+    updateAndDrawStars();
+    updateAndDrawHomerBursts();
+    updateAndDrawHomerTrailParticles();
+    drawHitOverlay();
+  }
+
+  if (gameState === "end" && !controlsReturnedAfterEnd && performance.now() >= endHoldUntil) {
+    controlsReturnedAfterEnd = true;
+    showControlsPanel();
+    instructionChip.textContent = "Round complete. Start a new game when ready.";
+  }
+
+  tickBatTrail();
+
+  if (gameState === "start") drawStartOverlay();
+  if (gameState === "countdown") drawCountdownOverlay();
+  if (gameState === "paused") drawPauseOverlay();
+  if (gameState === "end") drawEndOverlay();
+
+  ctx.restore();
+}
+
+// ---------- UI ----------
 startBtn.onclick = startOrResumeGame;
 pauseBtn.onclick = togglePause;
 resetBtn.onclick = resetGame;
