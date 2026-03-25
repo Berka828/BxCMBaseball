@@ -28,20 +28,19 @@ const pitchSpeedVal = document.getElementById("pitchSpeedVal");
 const swingThresholdVal = document.getElementById("swingThresholdVal");
 const pitchDelayVal = document.getElementById("pitchDelayVal");
 
-// safer defaults
+// defaults
 pitchDelaySlider.value = "3";
 pitchDelayVal.textContent = "3s";
 
-pitchSpeedSlider.oninput = () => pitchSpeedVal.textContent = pitchSpeedSlider.value;
-swingThresholdSlider.oninput = () => swingThresholdVal.textContent = swingThresholdSlider.value;
-pitchDelaySlider.oninput = () => pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
+pitchSpeedSlider.oninput = () => (pitchSpeedVal.textContent = pitchSpeedSlider.value);
+swingThresholdSlider.oninput = () => (swingThresholdVal.textContent = swingThresholdSlider.value);
+pitchDelaySlider.oninput = () => (pitchDelayVal.textContent = `${pitchDelaySlider.value}s`);
 
 let detector = null;
 let cameraReady = false;
 let modelReady = false;
-
-let poseLoopRunning = false;
-let renderLoopRunning = false;
+let poseLoopStarted = false;
+let renderLoopStarted = false;
 
 let latestPose = null;
 
@@ -60,18 +59,6 @@ let batVelocity = { x: 0, y: 0, speed: 0 };
 
 let ball = null;
 
-let hitText = "";
-let hitTextTimer = 0;
-let timingText = "";
-let timingTextTimer = 0;
-let flashTimer = 0;
-
-let confetti = [];
-let floatingStars = [];
-let homerBursts = [];
-let homerTrailParticles = [];
-let batTrail = [];
-
 let pitchTimer = null;
 let countdownTimer = null;
 let countdownValue = 5;
@@ -81,12 +68,8 @@ let endHoldUntil = 0;
 let endFeedback = "";
 let controlsReturnedAfterEnd = false;
 
-let screenShakeTimer = 0;
-let screenShakeAmount = 0;
-let gestureStartCooldownUntil = 0;
-
 const BALL_RADIUS = 14;
-const GRAVITY = 0.44;
+const GRAVITY = 0.42;
 const CONTACT_DISTANCE = 68;
 const BAT_LENGTH = 132;
 
@@ -94,11 +77,15 @@ const SKELETON_SCALE = 0.68;
 const SKELETON_OFFSET_Y = 100;
 const SKELETON_OFFSET_X = 0;
 
-// ---------- IMAGE ----------
+// background image
 const backgroundImg = new Image();
 let backgroundReady = false;
-backgroundImg.onload = () => { backgroundReady = true; };
-backgroundImg.onerror = () => { backgroundReady = false; };
+backgroundImg.onload = () => {
+  backgroundReady = true;
+};
+backgroundImg.onerror = () => {
+  backgroundReady = false;
+};
 backgroundImg.src = "stadium-bg.png";
 
 // ---------- AUDIO ----------
@@ -132,6 +119,7 @@ function tone(freq, duration, type = "sine", gainValue = 0.12, startTime = 0) {
 
   osc.connect(gain);
   gain.connect(audioCtx.destination);
+
   osc.start(now);
   osc.stop(now + duration + 0.03);
 }
@@ -153,13 +141,13 @@ function playMissSound() {
 }
 
 function playHitSound() {
-  tone(180, 0.03, "square", 0.14, 0);
-  tone(320, 0.08, "triangle", 0.10, 0.015);
+  tone(180, 0.04, "square", 0.14, 0);
+  tone(320, 0.08, "triangle", 0.10, 0.02);
 }
 
 function playBigHitSound() {
   tone(220, 0.04, "square", 0.15, 0);
-  tone(440, 0.08, "triangle", 0.12, 0.03);
+  tone(440, 0.10, "triangle", 0.12, 0.03);
   tone(660, 0.12, "triangle", 0.10, 0.08);
 }
 
@@ -168,7 +156,6 @@ function playHomeRunSound() {
   tone(523.25, 0.10, "triangle", 0.14, 0.08);
   tone(659.25, 0.12, "triangle", 0.14, 0.16);
   tone(783.99, 0.18, "triangle", 0.14, 0.26);
-  tone(1046.5, 0.20, "triangle", 0.12, 0.42);
 }
 
 function playCountdownBeep(n) {
@@ -183,10 +170,6 @@ function playGoSound() {
 // ---------- HELPERS ----------
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
-}
-
-function getKeypoint(pose, name, minScore = 0.28) {
-  return pose?.keypoints?.find(k => k.name === name && (k.score ?? 0) > minScore) || null;
 }
 
 function resizeCanvas() {
@@ -204,20 +187,6 @@ function updateHud() {
   veloEl.textContent = Math.round(bestExitVelo);
 }
 
-function clearPitchTimer() {
-  if (pitchTimer) {
-    clearTimeout(pitchTimer);
-    pitchTimer = null;
-  }
-}
-
-function clearCountdownTimer() {
-  if (countdownTimer) {
-    clearTimeout(countdownTimer);
-    countdownTimer = null;
-  }
-}
-
 function showControlsPanel() {
   if (!controlsPanel) return;
   controlsPanel.style.opacity = "1";
@@ -230,12 +199,18 @@ function hideControlsPanel() {
   controlsPanel.style.pointerEvents = "none";
 }
 
-function buildEndFeedback() {
-  if (hits >= 8 && bestExitVelo >= 220) return "Excellent round. Strong contact, smart timing, and big power.";
-  if (hits >= 6) return "Nice work. You made lots of contact and stayed active through the round.";
-  if (bestExitVelo >= 220) return "Big power. Next step is even better timing for more extra-base hits.";
-  if (misses > hits) return "Try starting your swing a little earlier and tracking the ball longer.";
-  return "Good effort. Smooth swings and better timing will boost your score.";
+function clearPitchTimer() {
+  if (pitchTimer) {
+    clearTimeout(pitchTimer);
+    pitchTimer = null;
+  }
+}
+
+function clearCountdownTimer() {
+  if (countdownTimer) {
+    clearTimeout(countdownTimer);
+    countdownTimer = null;
+  }
 }
 
 function resetRound() {
@@ -252,31 +227,24 @@ function resetRound() {
   batVelocity = { x: 0, y: 0, speed: 0 };
   ball = null;
 
-  hitText = "";
-  hitTextTimer = 0;
-  timingText = "";
-  timingTextTimer = 0;
-  flashTimer = 0;
-
-  confetti = [];
-  floatingStars = [];
-  homerBursts = [];
-  homerTrailParticles = [];
-  batTrail = [];
+  countdownValue = 5;
+  countdownActive = false;
 
   endHoldUntil = 0;
   endFeedback = "";
   controlsReturnedAfterEnd = false;
 
-  screenShakeTimer = 0;
-  screenShakeAmount = 0;
-
-  countdownValue = 5;
-  countdownActive = false;
-
   updateHud();
-  instructionChip.textContent = "Raise both hands, do a practice swing, or press Start.";
+  instructionChip.textContent = "Press Start to begin.";
   showControlsPanel();
+}
+
+function buildEndFeedback() {
+  if (hits >= 8 && bestExitVelo >= 220) return "Excellent round. Strong contact and big power.";
+  if (hits >= 6) return "Nice work. You made solid contact throughout the round.";
+  if (bestExitVelo >= 220) return "Great power. Try improving timing for even better results.";
+  if (misses > hits) return "Try swinging a little earlier and keeping your bat moving through the ball.";
+  return "Good effort. Keep practicing your timing and follow-through.";
 }
 
 function startEndSequence() {
@@ -286,6 +254,11 @@ function startEndSequence() {
   controlsReturnedAfterEnd = false;
   hideControlsPanel();
   instructionChip.textContent = "Round over. Review your results.";
+}
+
+// ---------- TRACKING ----------
+function getKeypoint(pose, name, minScore = 0.25) {
+  return pose?.keypoints?.find(k => k.name === name && (k.score ?? 0) > minScore) || null;
 }
 
 async function ensureTrackingReady() {
@@ -310,6 +283,7 @@ async function ensureTrackingReady() {
 
   if (!modelReady) {
     await tf.ready();
+    await tf.setBackend("webgl");
     detector = await poseDetection.createDetector(
       poseDetection.SupportedModels.MoveNet,
       { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
@@ -319,8 +293,8 @@ async function ensureTrackingReady() {
 }
 
 function startPoseLoop() {
-  if (poseLoopRunning) return;
-  poseLoopRunning = true;
+  if (poseLoopStarted) return;
+  poseLoopStarted = true;
 
   const updatePose = async () => {
     if (cameraReady && modelReady && detector) {
@@ -331,49 +305,19 @@ function startPoseLoop() {
         // keep previous pose
       }
     }
-
     requestAnimationFrame(updatePose);
   };
 
   requestAnimationFrame(updatePose);
 }
 
-function startRenderLoop() {
-  if (renderLoopRunning) return;
-  renderLoopRunning = true;
-
-  const frame = () => {
-    renderGame();
-    requestAnimationFrame(frame);
-  };
-
-  requestAnimationFrame(frame);
-}
-
 // ---------- BACKGROUND ----------
 function drawFallbackBackground() {
-  const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  skyGrad.addColorStop(0, "#2c3d57");
-  skyGrad.addColorStop(1, "#6e91a8");
-  ctx.fillStyle = skyGrad;
+  const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  grad.addColorStop(0, "#203a5c");
+  grad.addColorStop(1, "#88a3b8");
+  ctx.fillStyle = grad;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  ctx.fillStyle = "#4d9c3e";
-  ctx.fillRect(0, canvas.height * 0.68, canvas.width, canvas.height * 0.32);
-
-  ctx.fillStyle = "#c97342";
-  ctx.beginPath();
-  ctx.moveTo(0, canvas.height * 0.80);
-  ctx.lineTo(canvas.width * 0.18, canvas.height * 0.78);
-  ctx.lineTo(canvas.width * 0.28, canvas.height * 0.93);
-  ctx.lineTo(0, canvas.height * 0.98);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.fillStyle = "#c26b3d";
-  ctx.beginPath();
-  ctx.ellipse(canvas.width * 0.78, canvas.height * 0.88, canvas.width * 0.12, canvas.height * 0.08, -0.08, 0, Math.PI * 2);
-  ctx.fill();
 }
 
 function drawBackgroundImageCover(img) {
@@ -404,14 +348,11 @@ function drawBackground() {
     drawFallbackBackground();
   }
 
-  const haze = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  haze.addColorStop(0, "rgba(255,255,255,0.03)");
-  haze.addColorStop(1, "rgba(0,0,0,0.04)");
-  ctx.fillStyle = haze;
+  ctx.fillStyle = "rgba(0,0,0,0.05)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
-// ---------- SKELETON ----------
+// ---------- STICK FIGURE ----------
 function scalePoint(p, center, scale) {
   if (!p) return null;
   return {
@@ -429,13 +370,13 @@ function getPoseCenter(points) {
   };
 }
 
-function drawStickBone(a, b, color, width = 6, glow = 8) {
+function drawStickBone(a, b, color, width = 6) {
   if (!a || !b) return;
   ctx.save();
   ctx.strokeStyle = color;
   ctx.lineWidth = width;
   ctx.lineCap = "round";
-  ctx.shadowBlur = glow;
+  ctx.shadowBlur = 8;
   ctx.shadowColor = color;
   ctx.beginPath();
   ctx.moveTo(a.x, a.y);
@@ -444,11 +385,11 @@ function drawStickBone(a, b, color, width = 6, glow = 8) {
   ctx.restore();
 }
 
-function drawStickJoint(p, radius = 5, color = "#ffffff", glow = 6) {
+function drawStickJoint(p, radius = 4, color = "#ffffff") {
   if (!p) return;
   ctx.save();
   ctx.fillStyle = color;
-  ctx.shadowBlur = glow;
+  ctx.shadowBlur = 5;
   ctx.shadowColor = color;
   ctx.beginPath();
   ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
@@ -458,50 +399,6 @@ function drawStickJoint(p, radius = 5, color = "#ffffff", glow = 6) {
 
 function midPoint(a, b, t = 0.5) {
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-}
-
-function drawBatTrail() {
-  if (batTrail.length < 2) return;
-
-  for (let i = 1; i < batTrail.length; i++) {
-    const a = batTrail[i - 1];
-    const b = batTrail[i];
-    const alpha = i / batTrail.length;
-
-    ctx.save();
-    ctx.strokeStyle = `rgba(${a.color.r}, ${a.color.g}, ${a.color.b}, ${alpha * 0.55})`;
-    ctx.lineWidth = 4 + alpha * 8;
-    ctx.lineCap = "round";
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = `rgba(${a.color.r}, ${a.color.g}, ${a.color.b}, 0.8)`;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-    ctx.restore();
-  }
-}
-
-function updateBatTrail(batTip) {
-  if (!batTip) return;
-  const strong = batVelocity.speed > 520;
-  const color = strong ? { r: 255, g: 208, b: 70 } : { r: 88, g: 225, b: 255 };
-
-  batTrail.push({
-    x: batTip.x,
-    y: batTip.y,
-    life: 10,
-    color
-  });
-
-  if (batTrail.length > 12) batTrail.shift();
-}
-
-function tickBatTrail() {
-  for (let i = batTrail.length - 1; i >= 0; i--) {
-    batTrail[i].life--;
-    if (batTrail[i].life <= 0) batTrail.splice(i, 1);
-  }
 }
 
 function drawStickFigure(pose) {
@@ -580,39 +477,16 @@ function drawStickFigure(pose) {
     ctx.restore();
   }
 
-  [ls, rs, le, re, lw, rw, lk, rk, la, ra].forEach(p => drawStickJoint(p, 4, "#ffffff", 5));
+  [ls, rs, le, re, lw, rw, lk, rk, la, ra].forEach(p => drawStickJoint(p, 4, "#ffffff"));
 
   return { rw, re, lw, le, ls, rs };
 }
 
-function wristsAboveShoulders(pose) {
-  const lw = getKeypoint(pose, "left_wrist", 0.25);
-  const rw = getKeypoint(pose, "right_wrist", 0.25);
-  const ls = getKeypoint(pose, "left_shoulder", 0.25);
-  const rs = getKeypoint(pose, "right_shoulder", 0.25);
-  if (!lw || !rw || !ls || !rs) return false;
-  return lw.y < ls.y && rw.y < rs.y;
-}
-
-function tryGestureStart(pose) {
-  if (gameState !== "start") return;
-  if (countdownActive) return;
-  if (performance.now() < gestureStartCooldownUntil) return;
-
-  const handsUp = wristsAboveShoulders(pose);
-  const practiceSwing = batVelocity.speed > Math.max(parseFloat(swingThresholdSlider.value) * 0.82, 260);
-
-  if (handsUp || practiceSwing) {
-    gestureStartCooldownUntil = performance.now() + 2500;
-    startCountdown();
-  }
-}
-
 function getBattingArm(points) {
   if (battingSide === "right") {
-    return (points.rw && points.re) ? { wrist: points.rw, elbow: points.re } : null;
+    return points.rw && points.re ? { wrist: points.rw, elbow: points.re } : null;
   }
-  return (points.lw && points.le) ? { wrist: points.lw, elbow: points.le } : null;
+  return points.lw && points.le ? { wrist: points.lw, elbow: points.le } : null;
 }
 
 function drawBatFromSide(wrist, elbow) {
@@ -636,6 +510,7 @@ function drawBatFromSide(wrist, elbow) {
 
   ctx.save();
   ctx.lineCap = "round";
+
   ctx.strokeStyle = "#5d4037";
   ctx.lineWidth = 14;
   ctx.beginPath();
@@ -651,6 +526,7 @@ function drawBatFromSide(wrist, elbow) {
   ctx.moveTo(wrist.x, wrist.y);
   ctx.lineTo(batTip.x, batTip.y);
   ctx.stroke();
+
   ctx.restore();
 
   return batTip;
@@ -678,12 +554,21 @@ function updateBatVelocity(point) {
   prevBatPoint = { ...point, t: now };
 }
 
-// ---------- BALL ----------
-function getTimingFeedback(batTip, ballObj) {
-  const diff = batTip.x - ballObj.x;
-  if (Math.abs(diff) < 25) return { label: "PERFECT!", powerBonus: 1.15, direction: 1 };
-  if (diff < -25) return { label: "TOO EARLY", powerBonus: 0.85, direction: 1.2 };
-  return { label: "TOO LATE", powerBonus: 0.85, direction: 0.8 };
+// ---------- GAME MECHANICS ----------
+function scheduleNextPitch() {
+  clearPitchTimer();
+  if (pitchesLeft <= 0) return;
+  if (gameState !== "playing") return;
+
+  const delayMs = Math.round(parseFloat(pitchDelaySlider.value) * 1000);
+  instructionChip.textContent = "Get ready for the next pitch...";
+
+  pitchTimer = setTimeout(() => {
+    if (gameState === "playing" && !ball) {
+      createPitch();
+      instructionChip.textContent = "Swing across your body to meet the ball.";
+    }
+  }, delayMs);
 }
 
 function createPitch() {
@@ -697,7 +582,6 @@ function createPitch() {
     vx: -parseFloat(pitchSpeedSlider.value) - Math.random() * 1.2,
     vy: (Math.random() - 0.5) * 0.18,
     hit: false,
-    active: true,
     trail: [],
     result: ""
   };
@@ -705,16 +589,23 @@ function createPitch() {
   playPitchSound();
 }
 
+function getTimingFeedback(batTip, ballObj) {
+  const diff = batTip.x - ballObj.x;
+  if (Math.abs(diff) < 25) return { label: "PERFECT!", powerBonus: 1.15, direction: 1 };
+  if (diff < -25) return { label: "TOO EARLY", powerBonus: 0.85, direction: 1.2 };
+  return { label: "TOO LATE", powerBonus: 0.85, direction: 0.8 };
+}
+
 function classifyHit(power, upwardSwing) {
-  if (power > 1.9 && upwardSwing > 0.6) return { label: "HOME RUN!", points: 80, confettiCount: 42, launchBoost: 1.28 };
-  if (power > 1.5 && upwardSwing > 0.25) return { label: "TRIPLE!", points: 45, confettiCount: 24, launchBoost: 1.02 };
-  if (power > 1.08) return { label: "DOUBLE!", points: 28, confettiCount: 16, launchBoost: 0.88 };
-  if (power > 0.66) return { label: "SINGLE!", points: 16, confettiCount: 10, launchBoost: 0.72 };
-  return { label: "FOUL TIP!", points: 8, confettiCount: 6, launchBoost: 0.54 };
+  if (power > 1.9 && upwardSwing > 0.6) return { label: "HOME RUN!", points: 80, boost: 1.28 };
+  if (power > 1.5 && upwardSwing > 0.25) return { label: "TRIPLE!", points: 45, boost: 1.02 };
+  if (power > 1.08) return { label: "DOUBLE!", points: 28, boost: 0.88 };
+  if (power > 0.66) return { label: "SINGLE!", points: 16, boost: 0.72 };
+  return { label: "FOUL TIP!", points: 8, boost: 0.54 };
 }
 
 function tryHit(batTip) {
-  if (!ball || !ball.active || ball.hit) return;
+  if (!ball || ball.hit) return;
 
   const d = Math.hypot(ball.x - batTip.x, ball.y - batTip.y);
   if (d > CONTACT_DISTANCE) return;
@@ -738,8 +629,8 @@ function tryHit(batTip) {
   const baseVX = 9 + power * 8;
   const baseVY = -(4 + Math.max(0, upwardSwing) * 7 + power * 2.2);
 
-  ball.vx = lateral * baseVX * result.launchBoost * timing.direction + (Math.random() - 0.5) * 1.4;
-  ball.vy = baseVY * result.launchBoost + (Math.random() - 0.5) * 1.0;
+  ball.vx = lateral * baseVX * result.boost * timing.direction + (Math.random() - 0.5) * 1.4;
+  ball.vy = baseVY * result.boost + (Math.random() - 0.5) * 1.0;
   ball.result = result.label;
 
   score += result.points;
@@ -751,15 +642,10 @@ function tryHit(batTip) {
   hitTextTimer = 34;
   timingText = timing.label;
   timingTextTimer = 28;
-  flashTimer = result.label === "HOME RUN!" ? 9 : 4;
-
-  spawnConfetti(ball.x, ball.y, result.confettiCount);
-  spawnStars(ball.x, ball.y, result.label);
   updateHud();
 
   if (result.label === "HOME RUN!") {
     playHomeRunSound();
-    triggerHomeRunCelebration(ball.x, ball.y);
     instructionChip.textContent = "HOME RUN! PERFECT SWING!";
   } else if (result.label === "TRIPLE!" || result.label === "DOUBLE!") {
     playBigHitSound();
@@ -770,78 +656,37 @@ function tryHit(batTip) {
   }
 }
 
-function resolveMiss() {
-  misses++;
-  pitchesLeft--;
-  ball = null;
-  updateHud();
-  playMissSound();
-  instructionChip.textContent = "Miss! Reset and get ready.";
-  scheduleNextPitch();
-}
-
-function resolveFinishedHit() {
-  ball = null;
-  instructionChip.textContent = "Nice! Get ready for the next pitch.";
-  scheduleNextPitch();
-}
-
-function spawnHomeRunTrail() {
-  if (!ball || ball.result !== "HOME RUN!") return;
-
-  homerTrailParticles.push({
-    x: ball.x,
-    y: ball.y,
-    vx: (Math.random() - 0.5) * 1.5,
-    vy: (Math.random() - 0.5) * 1.5,
-    life: 18 + Math.random() * 8,
-    size: 4 + Math.random() * 5,
-    color: ["#ffd54f", "#ffffff", "#42a5f5", "#ff7043"][Math.floor(Math.random() * 4)]
-  });
-}
-
 function updateBall() {
-  if (!ball || !ball.active) return;
+  if (!ball) return;
   if (gameState !== "playing") return;
 
   if (!ball.hit) {
     ball.x += ball.vx;
     ball.y += ball.vy;
-    ball.trail.push({ x: ball.x, y: ball.y, a: 0.16 });
-    if (ball.trail.length > 7) ball.trail.shift();
-    if (ball.x < -40) resolveMiss();
+    if (ball.x < -40) {
+      misses++;
+      pitchesLeft--;
+      ball = null;
+      updateHud();
+      playMissSound();
+      instructionChip.textContent = "Miss! Reset and get ready.";
+      scheduleNextPitch();
+    }
   } else {
     ball.vy += GRAVITY;
-    ball.vx *= 0.992;
-    ball.vy *= 0.996;
-
     ball.x += ball.vx;
     ball.y += ball.vy;
-    ball.trail.push({ x: ball.x, y: ball.y, a: 0.24 });
-    if (ball.trail.length > 16) ball.trail.shift();
-
-    if (ball.result === "HOME RUN!") {
-      spawnHomeRunTrail();
-      spawnHomeRunTrail();
-    }
 
     if (ball.y > canvas.height + 60 || ball.x < -90 || ball.x > canvas.width + 90) {
-      resolveFinishedHit();
+      ball = null;
+      instructionChip.textContent = "Nice! Get ready for the next pitch.";
+      scheduleNextPitch();
     }
   }
 }
 
 function drawBall() {
-  if (!ball || !ball.active) return;
-
-  for (let i = 0; i < ball.trail.length; i++) {
-    const p = ball.trail[i];
-    const alpha = ((i + 1) / ball.trail.length) * p.a;
-    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, BALL_RADIUS * 0.58, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  if (!ball) return;
 
   ctx.save();
   ctx.shadowBlur = ball.result === "HOME RUN!" ? 24 : 14;
@@ -865,7 +710,6 @@ function drawBall() {
 // ---------- MINIMAP ----------
 function drawMiniMap() {
   miniCtx.clearRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
-
   miniCtx.fillStyle = "#0b2343";
   miniCtx.fillRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
 
@@ -873,8 +717,10 @@ function drawMiniMap() {
   miniCtx.lineWidth = 2;
   miniCtx.strokeRect(1, 1, miniMapCanvas.width - 2, miniMapCanvas.height - 2);
 
-  miniCtx.fillStyle = "rgba(255,255,255,0.06)";
-  miniCtx.fillRect(18, 55, miniMapCanvas.width - 36, 40);
+  miniCtx.fillStyle = "#dbeaff";
+  miniCtx.font = '900 12px "Nunito", sans-serif';
+  miniCtx.textAlign = "left";
+  miniCtx.fillText(battingSide === "right" ? "Right-handed" : "Left-handed", 12, 18);
 
   miniCtx.strokeStyle = "rgba(255,255,255,0.30)";
   miniCtx.lineWidth = 4;
@@ -901,91 +747,15 @@ function drawMiniMap() {
   if (ball) {
     const bx = clamp((ball.x / canvas.width) * miniMapCanvas.width, 10, miniMapCanvas.width - 10);
     const by = clamp((ball.y / canvas.height) * miniMapCanvas.height, 18, miniMapCanvas.height - 18);
+
     miniCtx.fillStyle = "#ffffff";
     miniCtx.beginPath();
     miniCtx.arc(bx, by, 7, 0, Math.PI * 2);
     miniCtx.fill();
   }
-
-  miniCtx.fillStyle = "#dbeaff";
-  miniCtx.font = '900 12px "Nunito", sans-serif';
-  miniCtx.textAlign = "left";
-  miniCtx.fillText(battingSide === "right" ? "Right-handed" : "Left-handed", 12, 18);
 }
 
 // ---------- OVERLAYS ----------
-function wrapCenteredText(text, centerX, y, maxWidth, lineHeight) {
-  const words = text.split(" ");
-  const lines = [];
-  let line = "";
-
-  for (let i = 0; i < words.length; i++) {
-    const test = line ? `${line} ${words[i]}` : words[i];
-    if (ctx.measureText(test).width > maxWidth && line) {
-      lines.push(line);
-      line = words[i];
-    } else {
-      line = test;
-    }
-  }
-  if (line) lines.push(line);
-
-  for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], centerX, y + i * lineHeight);
-  }
-}
-
-function drawHitOverlay() {
-  if (hitTextTimer > 0) {
-    const scale = 1 + Math.sin((34 - hitTextTimer) * 0.3) * 0.08;
-    ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height * 0.22);
-    ctx.scale(scale, scale);
-    ctx.textAlign = "center";
-    ctx.lineWidth = 9;
-    ctx.strokeStyle = "#14304b";
-    ctx.fillStyle = hitText.includes("HOME RUN!") ? "#ffd54f" : "#ffffff";
-    ctx.font = '900 64px "Baloo 2", sans-serif';
-    ctx.strokeText(hitText, 0, 0);
-    ctx.fillText(hitText, 0, 0);
-    ctx.restore();
-    hitTextTimer--;
-  }
-
-  if (timingTextTimer > 0) {
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.lineWidth = 7;
-    ctx.strokeStyle = "#14304b";
-
-    let fill = "#ffffff";
-    if (timingText === "PERFECT!") fill = "#66e07a";
-    if (timingText === "TOO EARLY" || timingText === "TOO LATE") fill = "#ffcc66";
-
-    ctx.fillStyle = fill;
-    ctx.font = '900 40px "Baloo 2", sans-serif';
-    ctx.strokeText(timingText, canvas.width / 2, canvas.height * 0.30);
-    ctx.fillText(timingText, canvas.width / 2, canvas.height * 0.30);
-    ctx.restore();
-    timingTextTimer--;
-  }
-
-  if (flashTimer > 0) {
-    ctx.fillStyle = `rgba(255,255,255,${flashTimer * 0.022})`;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    flashTimer--;
-  }
-}
-
-function getShakeOffset() {
-  if (screenShakeTimer <= 0) return { x: 0, y: 0 };
-  screenShakeTimer--;
-  return {
-    x: (Math.random() - 0.5) * screenShakeAmount,
-    y: (Math.random() - 0.5) * screenShakeAmount
-  };
-}
-
 function drawPauseOverlay() {
   ctx.fillStyle = "rgba(0,0,0,0.26)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1011,35 +781,8 @@ function drawStartOverlay() {
 
   ctx.fillStyle = "#ffffff";
   ctx.font = '900 26px "Nunito", sans-serif';
-  ctx.fillText("Raise both hands or do a practice swing to start too.", canvas.width / 2, canvas.height * 0.39);
-  ctx.fillText("Choose left or right handed play.", canvas.width / 2, canvas.height * 0.45);
-  ctx.fillText("Press Space or Esc anytime to pause.", canvas.width / 2, canvas.height * 0.51);
-}
-
-function drawEndOverlay() {
-  ctx.fillStyle = "rgba(0,0,0,0.28)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#ffd54f";
-  ctx.font = '900 56px "Baloo 2", sans-serif';
-  ctx.fillText("ROUND OVER!", canvas.width / 2, canvas.height * 0.31);
-
-  ctx.fillStyle = "#ffffff";
-  ctx.font = '900 28px "Nunito", sans-serif';
-  ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height * 0.40);
-  ctx.fillText(`Hits: ${hits}   |   Misses: ${misses}   |   Best EV: ${Math.round(bestExitVelo)}`, canvas.width / 2, canvas.height * 0.47);
-
-  ctx.fillStyle = "#dfeaff";
-  ctx.font = '900 24px "Nunito", sans-serif';
-  wrapCenteredText(endFeedback, canvas.width / 2, canvas.height * 0.58, canvas.width * 0.62, 32);
-
-  const secondsLeft = Math.max(0, Math.ceil((endHoldUntil - performance.now()) / 1000));
-  if (!controlsReturnedAfterEnd && secondsLeft > 0) {
-    ctx.fillStyle = "#ffffff";
-    ctx.font = '900 20px "Nunito", sans-serif';
-    ctx.fillText(`Controls return in ${secondsLeft}...`, canvas.width / 2, canvas.height * 0.71);
-  }
+  ctx.fillText("Choose left or right handed play.", canvas.width / 2, canvas.height * 0.39);
+  ctx.fillText("Press Space or Esc anytime to pause.", canvas.width / 2, canvas.height * 0.45);
 }
 
 function drawCountdownOverlay() {
@@ -1064,6 +807,78 @@ function drawCountdownOverlay() {
     ctx.strokeText("SWING!", canvas.width / 2, canvas.height * 0.45);
     ctx.fillText("SWING!", canvas.width / 2, canvas.height * 0.45);
   }
+}
+
+function drawEndOverlay() {
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffd54f";
+  ctx.font = '900 56px "Baloo 2", sans-serif';
+  ctx.fillText("ROUND OVER!", canvas.width / 2, canvas.height * 0.31);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 28px "Nunito", sans-serif';
+  ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height * 0.40);
+  ctx.fillText(`Hits: ${hits}   |   Misses: ${misses}   |   Best EV: ${Math.round(bestExitVelo)}`, canvas.width / 2, canvas.height * 0.47);
+
+  ctx.fillStyle = "#dfeaff";
+  ctx.font = '900 24px "Nunito", sans-serif';
+  ctx.fillText(endFeedback, canvas.width / 2, canvas.height * 0.58);
+
+  const secondsLeft = Math.max(0, Math.ceil((endHoldUntil - performance.now()) / 1000));
+  if (!controlsReturnedAfterEnd && secondsLeft > 0) {
+    ctx.fillStyle = "#ffffff";
+    ctx.font = '900 20px "Nunito", sans-serif';
+    ctx.fillText(`Controls return in ${secondsLeft}...`, canvas.width / 2, canvas.height * 0.71);
+  }
+}
+
+// ---------- RENDER ----------
+function renderGame() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  drawBackground();
+  drawMiniMap();
+
+  if (latestPose) {
+    const points = drawStickFigure(latestPose);
+    const battingArm = getBattingArm(points);
+
+    if (battingArm) {
+      const batTip = drawBatFromSide(battingArm.wrist, battingArm.elbow);
+      if (batTip) {
+        updateBatVelocity(batTip);
+
+        if (gameState === "playing") {
+          tryHit(batTip);
+        }
+      }
+    }
+  }
+
+  if (gameState === "playing") {
+    updateBall();
+    drawBall();
+
+    if (pitchesLeft <= 0 && !ball) {
+      startEndSequence();
+    }
+  } else {
+    drawBall();
+  }
+
+  if (gameState === "end" && !controlsReturnedAfterEnd && performance.now() >= endHoldUntil) {
+    controlsReturnedAfterEnd = true;
+    showControlsPanel();
+    instructionChip.textContent = "Round complete. Start a new game when ready.";
+  }
+
+  if (gameState === "start") drawStartOverlay();
+  if (gameState === "countdown") drawCountdownOverlay();
+  if (gameState === "paused") drawPauseOverlay();
+  if (gameState === "end") drawEndOverlay();
 }
 
 // ---------- GAME FLOW ----------
@@ -1160,79 +975,8 @@ function resetGame() {
   resetRound();
   gameState = "start";
   pauseBtn.textContent = "Pause Game";
-  instructionChip.textContent = "Raise both hands, do a practice swing, or press Start.";
+  instructionChip.textContent = "Press Start to begin.";
   showControlsPanel();
-}
-
-// ---------- RENDER ----------
-function renderGame() {
-  const shake = getShakeOffset();
-
-  ctx.save();
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.translate(shake.x, shake.y);
-
-  drawBackground();
-  drawMiniMap();
-
-  if (latestPose) {
-    const points = drawStickFigure(latestPose);
-    const battingArm = getBattingArm(points);
-
-    if (battingArm) {
-      const batTip = drawBatFromSide(battingArm.wrist, battingArm.elbow);
-      if (batTip) {
-        updateBatVelocity(batTip);
-        updateBatTrail(batTip);
-
-        if (gameState === "playing") {
-          tryHit(batTip);
-        }
-      }
-    }
-
-    if (gameState === "start") {
-      tryGestureStart(latestPose);
-    }
-  }
-
-  drawBatTrail();
-
-  if (gameState === "playing") {
-    updateBall();
-    drawBall();
-    updateAndDrawConfetti();
-    updateAndDrawStars();
-    updateAndDrawHomerBursts();
-    updateAndDrawHomerTrailParticles();
-    drawHitOverlay();
-
-    if (pitchesLeft <= 0 && !ball) {
-      startEndSequence();
-    }
-  } else {
-    drawBall();
-    updateAndDrawConfetti();
-    updateAndDrawStars();
-    updateAndDrawHomerBursts();
-    updateAndDrawHomerTrailParticles();
-    drawHitOverlay();
-  }
-
-  if (gameState === "end" && !controlsReturnedAfterEnd && performance.now() >= endHoldUntil) {
-    controlsReturnedAfterEnd = true;
-    showControlsPanel();
-    instructionChip.textContent = "Round complete. Start a new game when ready.";
-  }
-
-  tickBatTrail();
-
-  if (gameState === "start") drawStartOverlay();
-  if (gameState === "countdown") drawCountdownOverlay();
-  if (gameState === "paused") drawPauseOverlay();
-  if (gameState === "end") drawEndOverlay();
-
-  ctx.restore();
 }
 
 // ---------- UI ----------
@@ -1279,5 +1023,5 @@ rightHandBtn.classList.add("active");
 leftHandBtn.classList.remove("active");
 updateHud();
 resizeCanvas();
-instructionChip.textContent = "Raise both hands, do a practice swing, or press Start.";
+instructionChip.textContent = "Press Start to begin.";
 showControlsPanel();
