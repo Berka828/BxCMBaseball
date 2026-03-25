@@ -76,7 +76,7 @@ const CONTACT_DISTANCE = 68;
 const BAT_LENGTH = 132;
 
 const SKELETON_SCALE = 0.68;
-const SKELETON_OFFSET_Y = -400;
+const SKELETON_OFFSET_Y = 300;
 const SKELETON_OFFSET_X = -300;
 
 // ---------- AUDIO ----------
