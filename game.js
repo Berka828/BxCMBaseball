@@ -30,29 +30,27 @@ const pitchSpeedVal = document.getElementById("pitchSpeedVal");
 const swingThresholdVal = document.getElementById("swingThresholdVal");
 const pitchDelayVal = document.getElementById("pitchDelayVal");
 
-// -------------------- DEFAULTS --------------------
+// ---------- defaults ----------
 pitchDelaySlider.value = "3";
 pitchDelayVal.textContent = "3s";
+pitchSpeedSlider.oninput = () => (pitchSpeedVal.textContent = pitchSpeedSlider.value);
+swingThresholdSlider.oninput = () => (swingThresholdVal.textContent = swingThresholdSlider.value);
+pitchDelaySlider.oninput = () => (pitchDelayVal.textContent = `${pitchDelaySlider.value}s`);
 
-pitchSpeedSlider.oninput = () => {
-  pitchSpeedVal.textContent = pitchSpeedSlider.value;
-};
-swingThresholdSlider.oninput = () => {
-  swingThresholdVal.textContent = swingThresholdSlider.value;
-};
-pitchDelaySlider.oninput = () => {
-  pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
-};
+// ---------- assets ----------
+const backgroundImg = new Image();
+let backgroundReady = false;
+backgroundImg.onload = () => { backgroundReady = true; };
+backgroundImg.onerror = () => { backgroundReady = false; };
+backgroundImg.src = "stadium-bg.png";
 
-// -------------------- STATE --------------------
+// ---------- app state ----------
 let detector = null;
 let cameraReady = false;
 let modelReady = false;
 let poseLoopStarted = false;
 let renderLoopStarted = false;
-
 let latestPose = null;
-let latestBatTip = null;
 
 let gameState = "start"; // start | countdown | playing | paused | end
 let battingSide = "right";
@@ -64,53 +62,34 @@ let bestExitVelo = 0;
 let pitchesLeft = 10;
 const roundPitches = 10;
 
+let ball = null;
 let prevBatPoint = null;
 let batVelocity = { x: 0, y: 0, speed: 0 };
+let latestBatTip = null;
 
-let ball = null;
-
-let pitchTimer = null;
-let countdownTimer = null;
-let countdownValue = 5;
 let countdownActive = false;
+let countdownValue = 5;
+let countdownTimer = null;
+let pitchTimer = null;
 
 let endHoldUntil = 0;
 let endFeedback = "";
 let controlsReturnedAfterEnd = false;
 
-let gestureStartCooldownUntil = 0;
-
 let hitText = "";
 let hitTextTimer = 0;
 let timingText = "";
 let timingTextTimer = 0;
-let screenFlashTimer = 0;
-
-let confetti = [];
-let homerTrail = [];
 
 const BALL_RADIUS = 14;
 const GRAVITY = 0.42;
 const CONTACT_DISTANCE = 68;
 const BAT_LENGTH = 132;
-
 const SKELETON_SCALE = 0.68;
 const SKELETON_OFFSET_Y = 100;
 const SKELETON_OFFSET_X = 0;
 
-// -------------------- IMAGE BACKGROUND --------------------
-const backgroundImg = new Image();
-let backgroundReady = false;
-
-backgroundImg.onload = () => {
-  backgroundReady = true;
-};
-backgroundImg.onerror = () => {
-  backgroundReady = false;
-};
-backgroundImg.src = "stadium-bg.png";
-
-// -------------------- AUDIO --------------------
+// ---------- audio ----------
 let audioCtx = null;
 let soundEnabled = true;
 
@@ -127,21 +106,18 @@ function initAudio() {
 
 function tone(freq, duration, type = "sine", gainValue = 0.12, startTime = 0) {
   if (!soundEnabled || !audioCtx) return;
-
   const now = audioCtx.currentTime + startTime;
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
 
   osc.type = type;
   osc.frequency.setValueAtTime(freq, now);
-
   gain.gain.setValueAtTime(0.0001, now);
   gain.gain.exponentialRampToValueAtTime(gainValue, now + 0.01);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
   osc.connect(gain);
   gain.connect(audioCtx.destination);
-
   osc.start(now);
   osc.stop(now + duration + 0.03);
 }
@@ -151,46 +127,38 @@ function playStartSound() {
   tone(659.25, 0.12, "triangle", 0.14, 0.08);
   tone(783.99, 0.16, "triangle", 0.14, 0.16);
 }
-
 function playPitchSound() {
   tone(240, 0.08, "sawtooth", 0.09, 0);
   tone(180, 0.08, "sawtooth", 0.07, 0.05);
 }
-
 function playMissSound() {
   tone(220, 0.08, "square", 0.08, 0);
   tone(170, 0.10, "square", 0.06, 0.06);
 }
-
 function playHitSound() {
   tone(180, 0.04, "square", 0.14, 0);
   tone(320, 0.08, "triangle", 0.10, 0.02);
 }
-
 function playBigHitSound() {
   tone(220, 0.04, "square", 0.15, 0);
   tone(440, 0.10, "triangle", 0.12, 0.03);
   tone(660, 0.12, "triangle", 0.10, 0.08);
 }
-
 function playHomeRunSound() {
   tone(392, 0.10, "triangle", 0.14, 0);
   tone(523.25, 0.10, "triangle", 0.14, 0.08);
   tone(659.25, 0.12, "triangle", 0.14, 0.16);
   tone(783.99, 0.18, "triangle", 0.14, 0.26);
-  tone(1046.5, 0.20, "triangle", 0.12, 0.42);
 }
-
 function playCountdownBeep(n) {
   tone(n > 1 ? 660 : 880, 0.10, "triangle", 0.11, 0);
 }
-
 function playGoSound() {
   tone(880, 0.08, "triangle", 0.12, 0);
   tone(1174.66, 0.12, "triangle", 0.12, 0.08);
 }
 
-// -------------------- HELPERS --------------------
+// ---------- helpers ----------
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
@@ -201,6 +169,10 @@ function resizeCanvas() {
   canvas.height = rect.height;
 }
 window.addEventListener("resize", resizeCanvas);
+
+function screenX(x) {
+  return MIRROR_MODE ? canvas.width - x : x;
+}
 
 function updateHud() {
   scoreEl.textContent = score;
@@ -236,14 +208,6 @@ function clearCountdownTimer() {
   }
 }
 
-function buildEndFeedback() {
-  if (hits >= 8 && bestExitVelo >= 220) return "Excellent round. Strong contact and big power.";
-  if (hits >= 6) return "Nice work. You made solid contact throughout the round.";
-  if (bestExitVelo >= 220) return "Great power. Try improving timing for even better results.";
-  if (misses > hits) return "Try swinging a little earlier and staying with the ball longer.";
-  return "Good effort. Keep practicing your timing and follow-through.";
-}
-
 function resetRound() {
   clearPitchTimer();
   clearCountdownTimer();
@@ -253,13 +217,13 @@ function resetRound() {
   misses = 0;
   bestExitVelo = 0;
   pitchesLeft = roundPitches;
-
+  ball = null;
   prevBatPoint = null;
   batVelocity = { x: 0, y: 0, speed: 0 };
-  ball = null;
+  latestBatTip = null;
 
-  countdownValue = 5;
   countdownActive = false;
+  countdownValue = 5;
 
   endHoldUntil = 0;
   endFeedback = "";
@@ -269,14 +233,18 @@ function resetRound() {
   hitTextTimer = 0;
   timingText = "";
   timingTextTimer = 0;
-  screenFlashTimer = 0;
-
-  confetti = [];
-  homerTrail = [];
 
   updateHud();
   instructionChip.textContent = "Press Start to begin.";
   showControlsPanel();
+}
+
+function buildEndFeedback() {
+  if (hits >= 8 && bestExitVelo >= 220) return "Excellent round. Strong contact and big power.";
+  if (hits >= 6) return "Nice work. You made solid contact throughout the round.";
+  if (bestExitVelo >= 220) return "Great power. Try improving timing for even better results.";
+  if (misses > hits) return "Try swinging a little earlier and staying with the ball longer.";
+  return "Good effort. Keep practicing your timing and follow-through.";
 }
 
 function startEndSequence() {
@@ -288,7 +256,7 @@ function startEndSequence() {
   instructionChip.textContent = "Round over. Review your results.";
 }
 
-// -------------------- CAMERA / POSE --------------------
+// ---------- camera / pose ----------
 function getKeypoint(pose, name, minScore = 0.25) {
   return pose?.keypoints?.find(k => k.name === name && (k.score ?? 0) > minScore) || null;
 }
@@ -303,7 +271,6 @@ async function ensureTrackingReady() {
       },
       audio: false
     });
-
     video.srcObject = stream;
     await new Promise(resolve => {
       video.onloadedmetadata = () => resolve();
@@ -328,22 +295,22 @@ function startPoseLoop() {
   if (poseLoopStarted) return;
   poseLoopStarted = true;
 
-  const updatePose = async () => {
+  const loop = async () => {
     if (cameraReady && modelReady && detector) {
       try {
         const poses = await detector.estimatePoses(video, { flipHorizontal: true });
         latestPose = poses[0] || null;
-      } catch (err) {
-        // keep last pose
+      } catch (e) {
+        // keep previous pose
       }
     }
-    requestAnimationFrame(updatePose);
+    requestAnimationFrame(loop);
   };
 
-  requestAnimationFrame(updatePose);
+  requestAnimationFrame(loop);
 }
 
-// -------------------- BACKGROUND --------------------
+// ---------- background ----------
 function drawFallbackBackground() {
   const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
   grad.addColorStop(0, "#203a5c");
@@ -384,7 +351,7 @@ function drawBackground() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
-// -------------------- SKELETON / BAT --------------------
+// ---------- skeleton / bat ----------
 function scalePoint(p, center, scale) {
   if (!p) return null;
   return {
@@ -402,8 +369,8 @@ function getPoseCenter(points) {
   };
 }
 
-function screenX(x) {
-  return MIRROR_MODE ? canvas.width - x : x;
+function midPoint(a, b, t = 0.5) {
+  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 
 function drawStickBone(a, b, color, width = 6) {
@@ -431,10 +398,6 @@ function drawStickJoint(p, radius = 4, color = "#ffffff") {
   ctx.arc(screenX(p.x), p.y, radius, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
-}
-
-function midPoint(a, b, t = 0.5) {
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
 
 function drawStickFigure(pose) {
@@ -588,7 +551,7 @@ function updateBatVelocity(point) {
   prevBatPoint = { ...point, t: now };
 }
 
-// -------------------- NEXT LEVEL GUIDE --------------------
+// ---------- guide ----------
 function drawSwingGuide() {
   if (!latestBatTip) return;
   if (!["start", "countdown"].includes(gameState)) return;
@@ -619,23 +582,7 @@ function drawSwingGuide() {
   ctx.restore();
 }
 
-// -------------------- BALL --------------------
-function scheduleNextPitch() {
-  clearPitchTimer();
-  if (pitchesLeft <= 0) return;
-  if (gameState !== "playing") return;
-
-  const delayMs = Math.round(parseFloat(pitchDelaySlider.value) * 1000);
-  instructionChip.textContent = "Get ready for the next pitch...";
-
-  pitchTimer = setTimeout(() => {
-    if (gameState === "playing" && !ball) {
-      createPitch();
-      instructionChip.textContent = "Swing across your body to meet the ball.";
-    }
-  }, delayMs);
-}
-
+// ---------- ball ----------
 function createPitch() {
   if (pitchesLeft <= 0) return;
   if (gameState !== "playing") return;
@@ -686,10 +633,7 @@ function classifyHit(power, upwardSwing) {
 function tryHit(batTip) {
   if (!ball || ball.hit) return;
 
-  const dx = ball.x - batTip.x;
-  const dy = ball.y - batTip.y;
-  const d = Math.hypot(dx, dy);
-
+  const d = Math.hypot(ball.x - batTip.x, ball.y - batTip.y);
   if (d > CONTACT_DISTANCE) return;
   if (batVelocity.speed < parseFloat(swingThresholdSlider.value)) return;
 
@@ -699,7 +643,6 @@ function tryHit(batTip) {
   let power = clamp(batVelocity.speed / 700, 0.35, 2.1);
   power *= timing.powerBonus;
   const upwardSwing = clamp((-batVelocity.y) / 700, -0.4, 1.0);
-
   const result = classifyHit(power, upwardSwing);
 
   let launchDir = battingSide === "right" ? -1 : 1;
@@ -721,7 +664,6 @@ function tryHit(batTip) {
   hitTextTimer = 34;
   timingText = timing.label;
   timingTextTimer = 28;
-  screenFlashTimer = result.label === "HOME RUN!" ? 8 : 3;
   updateHud();
 
   if (result.label === "HOME RUN!") {
@@ -734,6 +676,22 @@ function tryHit(batTip) {
     playHitSound();
     instructionChip.textContent = timing.label;
   }
+}
+
+function scheduleNextPitch() {
+  clearPitchTimer();
+  if (pitchesLeft <= 0) return;
+  if (gameState !== "playing") return;
+
+  const delayMs = Math.round(parseFloat(pitchDelaySlider.value) * 1000);
+  instructionChip.textContent = "Get ready for the next pitch...";
+
+  pitchTimer = setTimeout(() => {
+    if (gameState === "playing" && !ball) {
+      createPitch();
+      instructionChip.textContent = "Swing across your body to meet the ball.";
+    }
+  }, delayMs);
 }
 
 function updateBall() {
@@ -757,15 +715,6 @@ function updateBall() {
     ball.vy += GRAVITY;
     ball.x += ball.vx;
     ball.y += ball.vy;
-
-    if (ball.result === "HOME RUN!") {
-      homerTrail.push({
-        x: ball.x,
-        y: ball.y,
-        life: 18 + Math.random() * 8,
-        r: 4 + Math.random() * 5
-      });
-    }
 
     if (
       ball.y > canvas.height + 60 ||
@@ -801,66 +750,7 @@ function drawBall() {
   ctx.restore();
 }
 
-// -------------------- SIMPLE FX --------------------
-function updateAndDrawHomerTrail() {
-  for (let i = homerTrail.length - 1; i >= 0; i--) {
-    const p = homerTrail[i];
-    p.life--;
-
-    ctx.save();
-    ctx.globalAlpha = Math.max(p.life / 22, 0);
-    ctx.fillStyle = "#ffd54f";
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = "#ffd54f";
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    if (p.life <= 0) homerTrail.splice(i, 1);
-  }
-}
-
-function drawHitOverlay() {
-  if (hitTextTimer > 0) {
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.lineWidth = 9;
-    ctx.strokeStyle = "#14304b";
-    ctx.fillStyle = hitText.includes("HOME RUN!") ? "#ffd54f" : "#ffffff";
-    ctx.font = '900 64px "Baloo 2", sans-serif';
-    ctx.strokeText(hitText, canvas.width / 2, canvas.height * 0.22);
-    ctx.fillText(hitText, canvas.width / 2, canvas.height * 0.22);
-    ctx.restore();
-    hitTextTimer--;
-  }
-
-  if (timingTextTimer > 0) {
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.lineWidth = 7;
-    ctx.strokeStyle = "#14304b";
-
-    let fill = "#ffffff";
-    if (timingText === "PERFECT!") fill = "#66e07a";
-    if (timingText === "TOO EARLY" || timingText === "TOO LATE") fill = "#ffcc66";
-
-    ctx.fillStyle = fill;
-    ctx.font = '900 40px "Baloo 2", sans-serif';
-    ctx.strokeText(timingText, canvas.width / 2, canvas.height * 0.30);
-    ctx.fillText(timingText, canvas.width / 2, canvas.height * 0.30);
-    ctx.restore();
-    timingTextTimer--;
-  }
-
-  if (screenFlashTimer > 0) {
-    ctx.fillStyle = `rgba(255,255,255,${screenFlashTimer * 0.02})`;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    screenFlashTimer--;
-  }
-}
-
-// -------------------- MINIMAP --------------------
+// ---------- minimap ----------
 function drawMiniMap() {
   miniCtx.clearRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
 
@@ -899,7 +789,7 @@ function drawMiniMap() {
   }
 }
 
-// -------------------- OVERLAYS --------------------
+// ---------- overlays ----------
 function drawPauseOverlay() {
   ctx.fillStyle = "rgba(0,0,0,0.26)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -980,7 +870,40 @@ function drawEndOverlay() {
   }
 }
 
-// -------------------- GAME FLOW --------------------
+function drawHitOverlay() {
+  if (hitTextTimer > 0) {
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.lineWidth = 9;
+    ctx.strokeStyle = "#14304b";
+    ctx.fillStyle = hitText.includes("HOME RUN!") ? "#ffd54f" : "#ffffff";
+    ctx.font = '900 64px "Baloo 2", sans-serif';
+    ctx.strokeText(hitText, canvas.width / 2, canvas.height * 0.22);
+    ctx.fillText(hitText, canvas.width / 2, canvas.height * 0.22);
+    ctx.restore();
+    hitTextTimer--;
+  }
+
+  if (timingTextTimer > 0) {
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = "#14304b";
+
+    let fill = "#ffffff";
+    if (timingText === "PERFECT!") fill = "#66e07a";
+    if (timingText === "TOO EARLY" || timingText === "TOO LATE") fill = "#ffcc66";
+
+    ctx.fillStyle = fill;
+    ctx.font = '900 40px "Baloo 2", sans-serif';
+    ctx.strokeText(timingText, canvas.width / 2, canvas.height * 0.30);
+    ctx.fillText(timingText, canvas.width / 2, canvas.height * 0.30);
+    ctx.restore();
+    timingTextTimer--;
+  }
+}
+
+// ---------- game flow ----------
 function startCountdown() {
   clearCountdownTimer();
   countdownActive = true;
@@ -1031,16 +954,11 @@ function togglePause() {
 
   if (gameState === "paused") {
     pauseBtn.textContent = "Pause Game";
-
-    if (!ball && hits === 0 && misses === 0 && pitchesLeft === roundPitches) {
-      startCountdown();
-    } else {
-      gameState = "playing";
-      hideControlsPanel();
-      instructionChip.textContent = "Game resumed.";
-      if (!ball) scheduleNextPitch();
-      playStartSound();
-    }
+    gameState = "playing";
+    hideControlsPanel();
+    instructionChip.textContent = "Game resumed.";
+    if (!ball) scheduleNextPitch();
+    playStartSound();
   }
 }
 
@@ -1078,7 +996,7 @@ function resetGame() {
   showControlsPanel();
 }
 
-// -------------------- RENDER --------------------
+// ---------- render ----------
 function renderGame() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -1109,7 +1027,6 @@ function renderGame() {
   if (gameState === "playing") {
     updateBall();
     drawBall();
-    updateAndDrawHomerTrail();
     drawHitOverlay();
 
     if (pitchesLeft <= 0 && !ball) {
@@ -1117,7 +1034,6 @@ function renderGame() {
     }
   } else {
     drawBall();
-    updateAndDrawHomerTrail();
     drawHitOverlay();
   }
 
@@ -1137,15 +1053,15 @@ function startRenderLoop() {
   if (renderLoopStarted) return;
   renderLoopStarted = true;
 
-  const frame = () => {
+  const loop = () => {
     renderGame();
-    requestAnimationFrame(frame);
+    requestAnimationFrame(loop);
   };
 
-  requestAnimationFrame(frame);
+  requestAnimationFrame(loop);
 }
 
-// -------------------- UI --------------------
+// ---------- UI ----------
 startBtn.onclick = startOrResumeGame;
 pauseBtn.onclick = togglePause;
 resetBtn.onclick = resetGame;
@@ -1186,6 +1102,10 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-// -------------------- INIT --------------------
+// ---------- init ----------
 rightHandBtn.classList.add("active");
-leftHandBtn.classList.remove("active
+leftHandBtn.classList.remove("active");
+updateHud();
+resizeCanvas();
+instructionChip.textContent = "Press Start to begin.";
+showControlsPanel();
