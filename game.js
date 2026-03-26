@@ -69,6 +69,18 @@ let screenShakeTimer = 0;
 let screenShakeAmount = 0;
 
 let bgTick = 0;
+let stadiumBg = new Image();
+let stadiumBgLoaded = false;
+
+stadiumBg.onload = () => {
+  stadiumBgLoaded = true;
+};
+
+stadiumBg.onerror = () => {
+  console.error("Background image failed to load.");
+};
+
+stadiumBg.src = "./stadium-bg.png";
 
 const BALL_RADIUS = 14;
 const GRAVITY = 0.44;
@@ -590,24 +602,29 @@ function drawIndoorField() {
 }
 
 function drawBackground() {
-  bgTick += 1;
+  if (!stadiumBgLoaded) {
+    ctx.fillStyle = "#1e2f4d";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
 
-  const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.55);
-  skyGrad.addColorStop(0, "#2c3d57");
-  skyGrad.addColorStop(1, "#b8c8d6");
-  ctx.fillStyle = skyGrad;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const imgRatio = stadiumBg.width / stadiumBg.height;
+  const canvasRatio = canvas.width / canvas.height;
 
-  drawRoofAndLights();
-  drawWindowScene(canvas.height * 0.16, canvas.height * 0.55);
-  drawFenceWall(canvas.height * 0.48);
-  drawIndoorField();
+  let drawWidth, drawHeight;
 
-  const haze = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  haze.addColorStop(0, "rgba(255,255,255,0.06)");
-  haze.addColorStop(1, "rgba(0,0,0,0.06)");
-  ctx.fillStyle = haze;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (canvasRatio > imgRatio) {
+    drawWidth = canvas.width;
+    drawHeight = canvas.width / imgRatio;
+  } else {
+    drawHeight = canvas.height;
+    drawWidth = canvas.height * imgRatio;
+  }
+
+  const offsetX = (canvas.width - drawWidth) / 2;
+  const offsetY = (canvas.height - drawHeight) / 2;
+
+  ctx.drawImage(stadiumBg, offsetX, offsetY, drawWidth, drawHeight);
 }
 
 // ---------- SKELETON SCALING ----------
