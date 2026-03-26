@@ -5,6 +5,9 @@ const ctx = canvas.getContext("2d");
 const miniMapCanvas = document.getElementById("miniMapCanvas");
 const miniCtx = miniMapCanvas.getContext("2d");
 
+const splashScreen = document.getElementById("splashScreen");
+const splashStartBtn = document.getElementById("splashStartBtn");
+
 const startBtn = document.getElementById("startBtn");
 const pauseBtn = document.getElementById("pauseBtn");
 const resetBtn = document.getElementById("resetBtn");
@@ -194,6 +197,11 @@ function updateHud() {
   hitsEl.textContent = hits;
   missesEl.textContent = misses;
   veloEl.textContent = Math.round(bestExitVelo);
+}
+
+function hideSplashScreen() {
+  if (!splashScreen) return;
+  splashScreen.classList.add("hidden");
 }
 
 function clearPitchTimer() {
@@ -1551,31 +1559,45 @@ async function loop() {
 
 // ---------- BUTTONS ----------
 async function startOrResumeGame() {
-  initAudio();
+  console.log("startOrResumeGame fired");
 
-  if (!detector) {
-    await setupCamera();
-    await loadModel();
-  }
+  try {
+    initAudio();
 
-  if (gameState === "paused") {
-    gameState = "playing";
+    if (!detector) {
+      console.log("setting up camera...");
+      await setupCamera();
+      console.log("camera ready");
+
+      console.log("loading model...");
+      await loadModel();
+      console.log("model ready");
+    }
+
+    hideSplashScreen();
+
+    if (gameState === "paused") {
+      gameState = "playing";
+      pauseBtn.textContent = "Pause Game";
+      instructionChip.textContent = "Game resumed.";
+      hideControlsPanel();
+      if (!ball) scheduleNextPitch();
+      playStartSound();
+      if (!animationId) loop();
+      return;
+    }
+
+    resetRound();
     pauseBtn.textContent = "Pause Game";
-    instructionChip.textContent = "Game resumed.";
-    hideControlsPanel();
-    if (!ball) scheduleNextPitch();
     playStartSound();
-    if (!animationId) loop();
-    return;
-  }
+    startCountdown();
 
-  resetRound();
-  pauseBtn.textContent = "Pause Game";
-  playStartSound();
-  startCountdown();
-
-  if (!animationId) {
-    loop();
+    if (!animationId) {
+      loop();
+    }
+  } catch (err) {
+    console.error("START ERROR:", err);
+    alert("Start failed. Open browser console with F12 to see the error.");
   }
 }
 
@@ -1626,6 +1648,14 @@ function resetGame() {
 }
 
 startBtn.onclick = startOrResumeGame;
+
+if (splashStartBtn) {
+  splashStartBtn.addEventListener("click", async () => {
+    console.log("SPLASH START CLICKED");
+    await startOrResumeGame();
+  });
+}
+
 pauseBtn.onclick = togglePause;
 resetBtn.onclick = resetGame;
 
