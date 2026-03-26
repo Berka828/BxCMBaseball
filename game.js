@@ -74,7 +74,7 @@ let bgTick = 0;
 // BACKGROUND IMAGE CHANGE ONLY
 // ===============================
 const stadiumBg = new Image();
-stadiumBg.src = "stadium-bg.png";
+stadiumBg.src = "./stadium-bg.png";
 let stadiumBgLoaded = false;
 
 stadiumBg.onload = () => {
@@ -599,13 +599,13 @@ function drawIndoorField() {
 }
 
 function drawBackground() {
-  bgTick += 1;
+  ctx.fillStyle = "#1e2f4d";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  if (!stadiumBgLoaded) {
-    ctx.fillStyle = "#1e2f4d";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    return;
+  if (stadiumBgLoaded) {
+    ctx.drawImage(stadiumBg, 0, 0, canvas.width, canvas.height);
   }
+}
 
   const imgRatio = stadiumBg.width / stadiumBg.height;
   const canvasRatio = canvas.width / canvas.height;
