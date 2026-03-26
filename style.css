@@ -351,3 +351,175 @@ input[type="range"] {
     top: 400px;
   }
 }
+
+/* =========================
+   SPLASH SCREEN
+========================= */
+.splashScreen {
+  position: absolute;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: radial-gradient(circle at center, #132347 0%, #060c18 55%, #02050a 100%);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 700ms ease, visibility 700ms ease;
+}
+
+.splashScreen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.splashBackdrop {
+  position: absolute;
+  inset: -8%;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 204, 0, 0.16), transparent 26%),
+    radial-gradient(circle at 75% 25%, rgba(132, 76, 255, 0.18), transparent 26%),
+    radial-gradient(circle at 50% 78%, rgba(0, 173, 239, 0.16), transparent 28%);
+  filter: blur(18px);
+  animation: splashDrift 12s ease-in-out infinite alternate;
+}
+
+.splashGlow {
+  position: absolute;
+  width: 70vmin;
+  height: 70vmin;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 214, 61, 0.18) 0%, rgba(255, 214, 61, 0.05) 35%, transparent 70%);
+  filter: blur(14px);
+  animation: splashPulse 4s ease-in-out infinite;
+}
+
+.splashInner {
+  position: relative;
+  z-index: 2;
+  width: min(92vw, 1200px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+  padding: 28px;
+}
+
+.splashPosterWrap {
+  position: relative;
+  width: min(92vw, 980px);
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow:
+    0 25px 80px rgba(0, 0, 0, 0.55),
+    0 0 0 2px rgba(255,255,255,0.08);
+  animation: splashFloat 4.5s ease-in-out infinite, splashZoom 9s ease-in-out infinite alternate;
+  transform-origin: center center;
+}
+
+.splashPoster {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.splashShine {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      115deg,
+      transparent 0%,
+      transparent 35%,
+      rgba(255,255,255,0.08) 46%,
+      rgba(255,255,255,0.18) 50%,
+      rgba(255,255,255,0.08) 54%,
+      transparent 66%,
+      transparent 100%
+    );
+  transform: translateX(-130%);
+  animation: splashShineMove 3.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.splashButtons {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.splashStartBtn {
+  appearance: none;
+  border: none;
+  border-radius: 999px;
+  padding: 18px 40px;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: clamp(24px, 3vw, 38px);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  color: #14213d;
+  background: linear-gradient(180deg, #ffd84d 0%, #ffbe0b 100%);
+  box-shadow:
+    0 14px 34px rgba(255, 190, 11, 0.30),
+    0 0 0 4px rgba(255,255,255,0.10);
+  animation: startBtnPulse 1.5s ease-in-out infinite;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.splashStartBtn:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow:
+    0 18px 42px rgba(255, 190, 11, 0.40),
+    0 0 0 4px rgba(255,255,255,0.14);
+}
+
+.splashStartBtn:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.splashHint {
+  font-family: "Nunito", sans-serif;
+  font-size: clamp(14px, 1.5vw, 19px);
+  font-weight: 700;
+  color: rgba(255,255,255,0.88);
+  text-align: center;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.35);
+}
+
+@keyframes splashFloat {
+  0%   { transform: translateY(0px); }
+  50%  { transform: translateY(-8px); }
+  100% { transform: translateY(0px); }
+}
+
+@keyframes splashZoom {
+  0%   { scale: 1; }
+  100% { scale: 1.03; }
+}
+
+@keyframes splashPulse {
+  0%   { transform: scale(0.98); opacity: 0.72; }
+  50%  { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(0.98); opacity: 0.72; }
+}
+
+@keyframes splashDrift {
+  0%   { transform: translate3d(-1.5%, -1%, 0) scale(1); }
+  100% { transform: translate3d(1.5%, 1%, 0) scale(1.04); }
+}
+
+@keyframes splashShineMove {
+  0%   { transform: translateX(-130%); }
+  100% { transform: translateX(130%); }
+}
+
+@keyframes startBtnPulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
