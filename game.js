@@ -5,6 +5,9 @@ const ctx = canvas.getContext("2d");
 const miniMapCanvas = document.getElementById("miniMapCanvas");
 const miniCtx = miniMapCanvas.getContext("2d");
 
+const homeRunsEl = document.getElementById("homeRunsEl");
+const bestHitEl = document.getElementById("bestHitEl");
+
 const splashScreen = document.getElementById("splashScreen");
 const splashStartBtn = document.getElementById("splashStartBtn");
 
@@ -59,6 +62,12 @@ let hitTextTimer = 0;
 let flashTimer = 0;
 let timingText = "";
 let timingTextTimer = 0;
+
+let homeRuns = 0;
+
+let handRaiseHoldMs = 0;
+let lastRaiseCheckTime = 0;
+let autoStartTriggered = false;
 
 let confetti = [];
 let floatingStars = [];
@@ -224,6 +233,40 @@ function playGoSound() {
 }
 
 // ---------- HELPERS ----------
+function checkForRaisedHandStart(points) {
+  if (!points || autoStartTriggered) return;
+
+  const now = performance.now();
+  if (!lastRaiseCheckTime) lastRaiseCheckTime = now;
+  const dt = now - lastRaiseCheckTime;
+  lastRaiseCheckTime = now;
+
+  const rightRaised =
+    points.rightWrist &&
+    points.rightShoulder &&
+    points.rightWrist.y < points.rightShoulder.y - 20;
+
+  const leftRaised =
+    points.leftWrist &&
+    points.leftShoulder &&
+    points.leftWrist.y < points.leftShoulder.y - 20;
+
+  const raised = rightRaised || leftRaised;
+
+  if (raised) {
+    handRaiseHoldMs += dt;
+    instructionChip.textContent = "Raise your hand to start...";
+  } else {
+    handRaiseHoldMs = 0;
+  }
+
+  if (handRaiseHoldMs >= 800) {
+    autoStartTriggered = true;
+    handRaiseHoldMs = 0;
+    startOrResumeGame();
+  }
+}
+
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
@@ -240,11 +283,14 @@ function resizeCanvas() {
 window.addEventListener("resize", resizeCanvas);
 
 function updateHud() {
-  scoreEl.textContent = score;
-  pitchesEl.textContent = pitchesLeft;
-  hitsEl.textContent = hits;
-  missesEl.textContent = misses;
-  veloEl.textContent = Math.round(bestExitVelo);
+  if (scoreEl) scoreEl.textContent = score;
+  if (pitchesEl) pitchesEl.textContent = pitchesLeft;
+  if (hitsEl) hitsEl.textContent = hits;
+  if (missesEl) missesEl.textContent = misses;
+  if (veloEl) veloEl.textContent = Math.round(bestExitVelo);
+
+  if (homeRunsEl) homeRunsEl.textContent = homeRuns;
+  if (bestHitEl) bestHitEl.textContent = Math.round(bestExitVelo);
 }
 
 function hideSplashScreen() {
@@ -304,6 +350,10 @@ function resetRound() {
   hits = 0;
   misses = 0;
   bestExitVelo = 0;
+  homeRuns = 0;
+handRaiseHoldMs = 0;
+lastRaiseCheckTime = 0;
+autoStartTriggered = false;
   pitchesLeft = roundPitches;
   prevBatPoint = null;
   batVelocity = { x: 0, y: 0, speed: 0 };
@@ -1108,16 +1158,10 @@ function tryHit(batTip) {
   updateHud();
 
   if (result.label === "HOME RUN!") {
-    playHomeRunSound();
-    triggerHomeRunCelebration(ball.x, ball.y);
-    instructionChip.textContent = "HOME RUN! PERFECT SWING!";
-  } else if (result.label === "TRIPLE!" || result.label === "DOUBLE!") {
-    playBigHitSound();
-    instructionChip.textContent = timing.label;
-  } else {
-    playHitSound();
-    instructionChip.textContent = timing.label;
-  }
+  homeRuns++;
+  playHomeRunSound();
+  triggerHomeRunCelebration(ball.x, ball.y);
+  instructionChip.textContent = "HOME RUN! PERFECT SWING!";
 }
 
 function resolveMiss() {
@@ -1546,27 +1590,32 @@ async function loop() {
 
   let pose = null;
 
-  if (detector && (gameState === "playing" || gameState === "countdown")) {
-    const poses = await detector.estimatePoses(video, { flipHorizontal: true });
-    pose = poses[0] || null;
-  }
+ if (detector && (gameState === "start" || gameState === "playing" || gameState === "countdown")) {
+  const poses = await detector.estimatePoses(video, { flipHorizontal: true });
+  pose = poses[0] || null;
+}
 
   if (pose) {
-    const points = drawStickFigure(pose);
-    const battingArm = getBattingArm(points);
+  const points = drawStickFigure(pose);
 
-    if (battingArm) {
-      const batTip = drawBatFromSide(battingArm.wrist, battingArm.elbow);
-      if (batTip) {
-        updateBatVelocity(batTip);
-        updateBatTrail(batTip);
+  if (gameState === "start") {
+    checkForRaisedHandStart(points);
+  }
 
-        if (gameState === "playing") {
-          tryHit(batTip);
-        }
+  const battingArm = getBattingArm(points);
+
+  if (battingArm) {
+    const batTip = drawBatFromSide(battingArm.wrist, battingArm.elbow);
+    if (batTip) {
+      updateBatVelocity(batTip);
+      updateBatTrail(batTip);
+
+      if (gameState === "playing") {
+        tryHit(batTip);
       }
     }
   }
+}
 
   drawBatTrail();
 
