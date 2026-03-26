@@ -1559,43 +1559,45 @@ async function loop() {
 
 // ---------- BUTTONS ----------
 async function startOrResumeGame() {
-  initAudio();
+  console.log("startOrResumeGame fired");
 
-  if (!detector) {
-    await setupCamera();
-    await loadModel();
-  }
+  try {
+    initAudio();
 
-  hideSplashScreen();
+    if (!detector) {
+      console.log("setting up camera...");
+      await setupCamera();
+      console.log("camera ready");
 
-  if (gameState === "paused") {
-    gameState = "playing";
+      console.log("loading model...");
+      await loadModel();
+      console.log("model ready");
+    }
+
+    hideSplashScreen();
+
+    if (gameState === "paused") {
+      gameState = "playing";
+      pauseBtn.textContent = "Pause Game";
+      instructionChip.textContent = "Game resumed.";
+      hideControlsPanel();
+      if (!ball) scheduleNextPitch();
+      playStartSound();
+      if (!animationId) loop();
+      return;
+    }
+
+    resetRound();
     pauseBtn.textContent = "Pause Game";
-    instructionChip.textContent = "Game resumed.";
-    hideControlsPanel();
-    if (!ball) scheduleNextPitch();
     playStartSound();
-    if (!animationId) loop();
-    return;
-  }
+    startCountdown();
 
-  resetRound();
-  pauseBtn.textContent = "Pause Game";
-  playStartSound();
-  startCountdown();
-
-  if (!animationId) {
-    loop();
-  }
-}
-
-  resetRound();
-  pauseBtn.textContent = "Pause Game";
-  playStartSound();
-  startCountdown();
-
-  if (!animationId) {
-    loop();
+    if (!animationId) {
+      loop();
+    }
+  } catch (err) {
+    console.error("START ERROR:", err);
+    alert("Start failed. Open browser console with F12 to see the error.");
   }
 }
 
@@ -1646,7 +1648,14 @@ function resetGame() {
 }
 
 startBtn.onclick = startOrResumeGame;
-if (splashStartBtn) splashStartBtn.onclick = startOrResumeGame;
+
+if (splashStartBtn) {
+  splashStartBtn.addEventListener("click", async () => {
+    console.log("SPLASH START CLICKED");
+    await startOrResumeGame();
+  });
+}
+
 pauseBtn.onclick = togglePause;
 resetBtn.onclick = resetGame;
 
