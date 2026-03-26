@@ -265,7 +265,7 @@ function checkForRaisedHandStart(points) {
     handRaiseHoldMs = 0;
     startOrResumeGame();
   }
-}   // <-- ADD THIS LINE
+}
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
