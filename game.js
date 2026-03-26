@@ -70,13 +70,24 @@ let screenShakeAmount = 0;
 
 let bgTick = 0;
 
+// ===============================
+// BACKGROUND IMAGE CHANGE ONLY
+// ===============================
+const stadiumBg = new Image();
+stadiumBg.src = "stadium-bg.png";
+let stadiumBgLoaded = false;
+
+stadiumBg.onload = () => {
+  stadiumBgLoaded = true;
+};
+
 const BALL_RADIUS = 14;
 const GRAVITY = 0.44;
 const CONTACT_DISTANCE = 68;
 const BAT_LENGTH = 132;
 
 const SKELETON_SCALE = 0.68;
-const SKELETON_OFFSET_Y = 124;
+const SKELETON_OFFSET_Y = 360;
 const SKELETON_OFFSET_X = -300;
 
 // ---------- AUDIO ----------
@@ -384,7 +395,6 @@ function drawWindowScene(yTop, yBottom) {
     ctx.fillStyle = winGrad;
     ctx.fillRect(ix, iy, iw, ih);
 
-    // glass reflections
     ctx.strokeStyle = "rgba(255,255,255,0.20)";
     ctx.lineWidth = 8;
     ctx.beginPath();
@@ -392,7 +402,6 @@ function drawWindowScene(yTop, yBottom) {
     ctx.lineTo(ix + iw * 0.45, iy + ih);
     ctx.stroke();
 
-    // skyline
     ctx.fillStyle = "rgba(90,102,120,0.28)";
     const baseY = iy + ih;
     const drift = (bgTick * 0.12) % (iw * 0.4);
@@ -592,22 +601,29 @@ function drawIndoorField() {
 function drawBackground() {
   bgTick += 1;
 
-  const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.55);
-  skyGrad.addColorStop(0, "#2c3d57");
-  skyGrad.addColorStop(1, "#b8c8d6");
-  ctx.fillStyle = skyGrad;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (!stadiumBgLoaded) {
+    ctx.fillStyle = "#1e2f4d";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
 
-  drawRoofAndLights();
-  drawWindowScene(canvas.height * 0.16, canvas.height * 0.55);
-  drawFenceWall(canvas.height * 0.48);
-  drawIndoorField();
+  const imgRatio = stadiumBg.width / stadiumBg.height;
+  const canvasRatio = canvas.width / canvas.height;
 
-  const haze = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  haze.addColorStop(0, "rgba(255,255,255,0.06)");
-  haze.addColorStop(1, "rgba(0,0,0,0.06)");
-  ctx.fillStyle = haze;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  let drawWidth, drawHeight;
+
+  if (canvasRatio > imgRatio) {
+    drawWidth = canvas.width;
+    drawHeight = canvas.width / imgRatio;
+  } else {
+    drawHeight = canvas.height;
+    drawWidth = canvas.height * imgRatio;
+  }
+
+  const offsetX = (canvas.width - drawWidth) / 2;
+  const offsetY = (canvas.height - drawHeight) / 2;
+
+  ctx.drawImage(stadiumBg, offsetX, offsetY, drawWidth, drawHeight);
 }
 
 // ---------- SKELETON SCALING ----------
@@ -628,91 +644,60 @@ function getPoseCenter(points) {
   };
 }
 
+function getScaledPosePoints(pose) {
+  const rawPoints = {
+    nose: getKeypoint(pose, "nose"),
+    leftShoulder: getKeypoint(pose, "left_shoulder"),
+    rightShoulder: getKeypoint(pose, "right_shoulder"),
+    leftElbow: getKeypoint(pose, "left_elbow"),
+    rightElbow: getKeypoint(pose, "right_elbow"),
+    leftWrist: getKeypoint(pose, "left_wrist"),
+    rightWrist: getKeypoint(pose, "right_wrist"),
+    leftHip: getKeypoint(pose, "left_hip"),
+    rightHip: getKeypoint(pose, "right_hip"),
+    leftKnee: getKeypoint(pose, "left_knee"),
+    rightKnee: getKeypoint(pose, "right_knee"),
+    leftAnkle: getKeypoint(pose, "left_ankle"),
+    rightAnkle: getKeypoint(pose, "right_ankle")
+  };
+
+  const present = Object.values(rawPoints).filter(Boolean);
+  const center = getPoseCenter(present);
+  if (!center) return rawPoints;
+
+  const scaled = {};
+  for (const [key, value] of Object.entries(rawPoints)) {
+    scaled[key] = scalePoint(value, center, SKELETON_SCALE);
+  }
+  return scaled;
+}
+
 // ---------- TIMING ----------
 function getTimingFeedback(batTip, ballObj) {
   const diff = batTip.x - ballObj.x;
+  const absDiff = Math.abs(diff);
 
-  if (Math.abs(diff) < 25) {
-    return { label: "PERFECT!", powerBonus: 1.15, direction: 1 };
+  if (absDiff <= 16) {
+    return { label: "PERFECT!", powerBonus: 1.14, direction: 1.0 };
   }
-  if (diff < -25) {
-    return { label: "TOO EARLY", powerBonus: 0.85, direction: 1.2 };
-  }
-  return { label: "TOO LATE", powerBonus: 0.85, direction: 0.8 };
-}
 
-// ---------- SKELETON / BAT ----------
-function drawStickBone(a, b, color, width = 6, glow = 8) {
-  if (!a || !b) return;
-
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = width;
-  ctx.lineCap = "round";
-  ctx.shadowBlur = glow;
-  ctx.shadowColor = color;
-  ctx.beginPath();
-  ctx.moveTo(a.x, a.y);
-  ctx.lineTo(b.x, b.y);
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawStickJoint(p, radius = 5, color = "#ffffff", glow = 6) {
-  if (!p) return;
-
-  ctx.save();
-  ctx.fillStyle = color;
-  ctx.shadowBlur = glow;
-  ctx.shadowColor = color;
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
-function midPoint(a, b, t = 0.5) {
-  return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-}
-
-function drawBatTrail() {
-  if (batTrail.length < 2) return;
-
-  for (let i = 1; i < batTrail.length; i++) {
-    const a = batTrail[i - 1];
-    const b = batTrail[i];
-    const alpha = i / batTrail.length;
-
-    ctx.save();
-    ctx.strokeStyle = `rgba(${a.color.r}, ${a.color.g}, ${a.color.b}, ${alpha * 0.55})`;
-    ctx.lineWidth = 4 + alpha * 8;
-    ctx.lineCap = "round";
-    ctx.shadowBlur = 10;
-    ctx.shadowColor = `rgba(${a.color.r}, ${a.color.g}, ${a.color.b}, 0.8)`;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-    ctx.restore();
+  if (battingSide === "right") {
+    if (diff < -16) {
+      return { label: "TOO EARLY", powerBonus: 0.86, direction: 0.92 };
+    }
+    return { label: "TOO LATE", powerBonus: 0.84, direction: 1.05 };
+  } else {
+    if (diff > 16) {
+      return { label: "TOO EARLY", powerBonus: 0.86, direction: 0.92 };
+    }
+    return { label: "TOO LATE", powerBonus: 0.84, direction: 1.05 };
   }
 }
 
-function updateBatTrail(batTip) {
-  if (!batTip) return;
-
-  const strong = batVelocity.speed > 520;
-  const color = strong
-    ? { r: 255, g: 208, b: 70 }
-    : { r: 88, g: 225, b: 255 };
-
-  batTrail.push({
-    x: batTip.x,
-    y: batTip.y,
-    life: 10,
-    color
-  });
-
-  if (batTrail.length > 12) batTrail.shift();
+// ---------- BAT TRAIL ----------
+function updateBatTrail(point) {
+  batTrail.push({ x: point.x, y: point.y, life: 10 });
+  if (batTrail.length > 14) batTrail.shift();
 }
 
 function tickBatTrail() {
@@ -722,96 +707,121 @@ function tickBatTrail() {
   }
 }
 
-function drawStickFigure(pose) {
-  let ls = getKeypoint(pose, "left_shoulder");
-  let rs = getKeypoint(pose, "right_shoulder");
-  let le = getKeypoint(pose, "left_elbow");
-  let re = getKeypoint(pose, "right_elbow");
-  let lw = getKeypoint(pose, "left_wrist");
-  let rw = getKeypoint(pose, "right_wrist");
-  let lh = getKeypoint(pose, "left_hip");
-  let rh = getKeypoint(pose, "right_hip");
-  let lk = getKeypoint(pose, "left_knee");
-  let rk = getKeypoint(pose, "right_knee");
-  let la = getKeypoint(pose, "left_ankle");
-  let ra = getKeypoint(pose, "right_ankle");
-  let nose = getKeypoint(pose, "nose");
-  let leye = getKeypoint(pose, "left_eye", 0.2);
-  let reye = getKeypoint(pose, "right_eye", 0.2);
-
-  const center = getPoseCenter([ls, rs, le, re, lw, rw, lh, rh, lk, rk, la, ra, nose]);
-  if (!center) return { rw: null, re: null, lw: null, le: null };
-
-  ls = scalePoint(ls, center, SKELETON_SCALE);
-  rs = scalePoint(rs, center, SKELETON_SCALE);
-  le = scalePoint(le, center, SKELETON_SCALE);
-  re = scalePoint(re, center, SKELETON_SCALE);
-  lw = scalePoint(lw, center, SKELETON_SCALE);
-  rw = scalePoint(rw, center, SKELETON_SCALE);
-  lh = scalePoint(lh, center, SKELETON_SCALE);
-  rh = scalePoint(rh, center, SKELETON_SCALE);
-  lk = scalePoint(lk, center, SKELETON_SCALE);
-  rk = scalePoint(rk, center, SKELETON_SCALE);
-  la = scalePoint(la, center, SKELETON_SCALE);
-  ra = scalePoint(ra, center, SKELETON_SCALE);
-  nose = scalePoint(nose, center, SKELETON_SCALE);
-  leye = scalePoint(leye, center, SKELETON_SCALE);
-  reye = scalePoint(reye, center, SKELETON_SCALE);
-
-  const armColor = "#58e1ff";
-  const legColor = "#8df55f";
-  const coreColor = "#ffd54f";
-  const headColor = "#ffb86c";
-
-  const shoulderMid = (ls && rs) ? midPoint(ls, rs, 0.5) : null;
-  const hipMid = (lh && rh) ? midPoint(lh, rh, 0.5) : null;
-
-  if (shoulderMid && hipMid) {
-    const shortHip = midPoint(shoulderMid, hipMid, 0.62);
-    drawStickBone(shoulderMid, shortHip, coreColor, 7);
-  }
-
-  if (ls && rs) drawStickBone(ls, rs, coreColor, 5);
-
-  drawStickBone(ls, le, armColor, 6);
-  drawStickBone(le, lw, armColor, 6);
-  drawStickBone(rs, re, armColor, 6);
-  drawStickBone(re, rw, armColor, 6);
-
-  if (hipMid && lk) drawStickBone(hipMid, lk, legColor, 6);
-  if (lk && la) drawStickBone(lk, la, legColor, 6);
-  if (hipMid && rk) drawStickBone(hipMid, rk, legColor, 6);
-  if (rk && ra) drawStickBone(rk, ra, legColor, 6);
-
-  if (nose && shoulderMid) {
-    drawStickBone(shoulderMid, nose, headColor, 5);
-  }
-
-  if (nose && leye && reye) {
-    const headR = Math.max(10, Math.abs(leye.x - reye.x) * 0.95);
-    ctx.save();
-    ctx.strokeStyle = headColor;
-    ctx.lineWidth = 4;
-    ctx.shadowBlur = 8;
-    ctx.shadowColor = headColor;
+function drawBatTrail() {
+  for (let i = 0; i < batTrail.length; i++) {
+    const p = batTrail[i];
+    const alpha = clamp(p.life / 10, 0, 1) * 0.35;
+    const radius = 8 + (batTrail.length - i) * 0.5;
+    ctx.fillStyle = `rgba(255, 202, 40, ${alpha})`;
     ctx.beginPath();
-    ctx.arc(nose.x, nose.y + 3, headR, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ---------- STICK FIGURE ----------
+function drawStickFigure(pose) {
+  const p = getScaledPosePoints(pose);
+
+  const nose = p.nose;
+  const ls = p.leftShoulder;
+  const rs = p.rightShoulder;
+  const le = p.leftElbow;
+  const re = p.rightElbow;
+  const lw = p.leftWrist;
+  const rw = p.rightWrist;
+  const lh = p.leftHip;
+  const rh = p.rightHip;
+  const lk = p.leftKnee;
+  const rk = p.rightKnee;
+  const la = p.leftAnkle;
+  const ra = p.rightAnkle;
+
+  const joints = [nose, ls, rs, le, re, lw, rw, lh, rh, lk, rk, la, ra].filter(Boolean);
+  if (joints.length < 4) return null;
+
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  function line(a, b, width = 10, color = "#8fe3ff") {
+    if (!a || !b) return;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = "rgba(143,227,255,0.55)";
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
     ctx.stroke();
-    ctx.restore();
   }
 
-  [ls, rs, le, re, lw, rw, lk, rk, la, ra].forEach(p => drawStickJoint(p, 4, "#ffffff", 5));
-  if (shoulderMid) drawStickJoint(shoulderMid, 3, "#ffffff", 4);
-  if (hipMid) drawStickJoint(hipMid, 3, "#ffffff", 4);
+  function joint(a, r = 8, color = "#ffffff") {
+    if (!a) return;
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = "rgba(255,255,255,0.65)";
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
-  return { rw, re, lw, le };
+  const neck = ls && rs ? { x: (ls.x + rs.x) / 2, y: (ls.y + rs.y) / 2 } : null;
+  const pelvis = lh && rh ? { x: (lh.x + rh.x) / 2, y: (lh.y + rh.y) / 2 } : null;
+
+  if (nose && neck) {
+    const headRadius = Math.max(14, Math.min(26, Math.hypot(nose.x - neck.x, nose.y - neck.y) * 0.75));
+    ctx.strokeStyle = "#8fe3ff";
+    ctx.lineWidth = 8;
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = "rgba(143,227,255,0.55)";
+    ctx.beginPath();
+    ctx.arc(nose.x, nose.y - headRadius * 0.15, headRadius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  line(ls, rs, 12);
+  line(ls, le, 10);
+  line(le, lw, 9);
+  line(rs, re, 10);
+  line(re, rw, 9);
+
+  line(ls, lh, 10);
+  line(rs, rh, 10);
+  line(lh, rh, 12);
+
+  line(lh, lk, 10);
+  line(lk, la, 9);
+  line(rh, rk, 10);
+  line(rk, ra, 9);
+
+  if (neck && pelvis) line(neck, pelvis, 12);
+
+  joint(ls); joint(rs); joint(le, 7); joint(re, 7);
+  joint(lw, 7); joint(rw, 7);
+  joint(lh, 7); joint(rh, 7);
+  joint(lk, 7); joint(rk, 7);
+  joint(la, 7); joint(ra, 7);
+
+  ctx.restore();
+
+  return p;
 }
 
 function getBattingArm(points) {
+  if (!points) return null;
+
   if (battingSide === "right") {
-    return (points.rw && points.re) ? { wrist: points.rw, elbow: points.re } : null;
+    if (points.rightWrist && points.rightElbow) {
+      return { wrist: points.rightWrist, elbow: points.rightElbow, shoulder: points.rightShoulder };
+    }
+  } else {
+    if (points.leftWrist && points.leftElbow) {
+      return { wrist: points.leftWrist, elbow: points.leftElbow, shoulder: points.leftShoulder };
+    }
   }
-  return (points.lw && points.le) ? { wrist: points.lw, elbow: points.le } : null;
+
+  return null;
 }
 
 function drawBatFromSide(wrist, elbow) {
@@ -820,26 +830,23 @@ function drawBatFromSide(wrist, elbow) {
   const dx = wrist.x - elbow.x;
   const dy = wrist.y - elbow.y;
   const len = Math.hypot(dx, dy) || 1;
-  const nx = dx / len;
-  const ny = dy / len;
+
+  const ux = dx / len;
+  const uy = dy / len;
 
   const batTip = {
-    x: wrist.x + nx * BAT_LENGTH,
-    y: wrist.y + ny * BAT_LENGTH
-  };
-
-  const handleEnd = {
-    x: wrist.x - nx * 26,
-    y: wrist.y - ny * 26
+    x: wrist.x + ux * BAT_LENGTH,
+    y: wrist.y + uy * BAT_LENGTH
   };
 
   ctx.save();
-  ctx.lineCap = "round";
 
-  ctx.strokeStyle = "#5d4037";
-  ctx.lineWidth = 14;
+  ctx.strokeStyle = "#4e342e";
+  ctx.lineWidth = 16;
+  ctx.shadowBlur = 18;
+  ctx.shadowColor = "rgba(0,0,0,0.25)";
   ctx.beginPath();
-  ctx.moveTo(handleEnd.x, handleEnd.y);
+  ctx.moveTo(wrist.x, wrist.y);
   ctx.lineTo(batTip.x, batTip.y);
   ctx.stroke();
 
