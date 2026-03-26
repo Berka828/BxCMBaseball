@@ -5,6 +5,9 @@ const ctx = canvas.getContext("2d");
 const miniMapCanvas = document.getElementById("miniMapCanvas");
 const miniCtx = miniMapCanvas.getContext("2d");
 
+const splashScreen = document.getElementById("splashScreen");
+const splashStartBtn = document.getElementById("splashStartBtn");
+
 const startBtn = document.getElementById("startBtn");
 const pauseBtn = document.getElementById("pauseBtn");
 const resetBtn = document.getElementById("resetBtn");
@@ -194,6 +197,11 @@ function updateHud() {
   hitsEl.textContent = hits;
   missesEl.textContent = misses;
   veloEl.textContent = Math.round(bestExitVelo);
+}
+
+function hideSplashScreen() {
+  if (!splashScreen) return;
+  splashScreen.classList.add("hidden");
 }
 
 function clearPitchTimer() {
@@ -1558,6 +1566,8 @@ async function startOrResumeGame() {
     await loadModel();
   }
 
+  hideSplashScreen();
+
   if (gameState === "paused") {
     gameState = "playing";
     pauseBtn.textContent = "Pause Game";
@@ -1568,6 +1578,16 @@ async function startOrResumeGame() {
     if (!animationId) loop();
     return;
   }
+
+  resetRound();
+  pauseBtn.textContent = "Pause Game";
+  playStartSound();
+  startCountdown();
+
+  if (!animationId) {
+    loop();
+  }
+}
 
   resetRound();
   pauseBtn.textContent = "Pause Game";
@@ -1626,6 +1646,7 @@ function resetGame() {
 }
 
 startBtn.onclick = startOrResumeGame;
+if (splashStartBtn) splashStartBtn.onclick = startOrResumeGame;
 pauseBtn.onclick = togglePause;
 resetBtn.onclick = resetGame;
 
