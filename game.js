@@ -1808,3 +1808,4 @@ if (splashStartBtn) {
 
 pauseBtn.onclick = togglePause;
 resetBtn.onclick = resetGame;
+}
