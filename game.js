@@ -596,14 +596,29 @@ function drawIndoorField() {
   ctx.restore();
 }
 
+let bgTick = 0;
+
+let stadiumBg = new Image();
+let stadiumBgLoaded = false;
+
+stadiumBg.onload = () => {
+  stadiumBgLoaded = true;
+  console.log("BACKGROUND LOADED OK");
+};
+
+stadiumBg.onerror = () => {
+  console.error("BACKGROUND FAILED TO LOAD");
+};
+
+stadiumBg.src = "./stadium-bg.png";
+
 function drawBackground() {
-  if (stadiumBgLoaded) {
-    ctx.drawImage(stadiumBg, 0, 0, canvas.width, canvas.height);
-  } else {
-    // fallback while image loads
-    ctx.fillStyle = "#1e2f4d";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
+  ctx.fillStyle = "#1e2f4d";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (!stadiumBgLoaded) return;
+
+  ctx.drawImage(stadiumBg, 0, 0, canvas.width, canvas.height);
 }
 
 // ---------- SKELETON SCALING ----------
