@@ -36,20 +36,27 @@ const pitchDelayVal = document.getElementById("pitchDelayVal");
 const rightPanel = document.querySelector(".rightPanel");
 const controlDock = document.querySelector(".controlDock");
 
+// ---------- DEFAULTS ----------
+if (pitchSpeedSlider) pitchSpeedSlider.value = "12";
+if (pitchDelaySlider) pitchDelaySlider.value = "3.5";
+
 // ---------- SAFE SLIDER WIRING ----------
 if (pitchSpeedSlider && pitchSpeedVal) {
+  pitchSpeedVal.textContent = pitchSpeedSlider.value;
   pitchSpeedSlider.oninput = () => {
     pitchSpeedVal.textContent = pitchSpeedSlider.value;
   };
 }
 
 if (swingThresholdSlider && swingThresholdVal) {
+  swingThresholdVal.textContent = swingThresholdSlider.value;
   swingThresholdSlider.oninput = () => {
     swingThresholdVal.textContent = swingThresholdSlider.value;
   };
 }
 
 if (pitchDelaySlider && pitchDelayVal) {
+  pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
   pitchDelaySlider.oninput = () => {
     pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
   };
@@ -58,7 +65,7 @@ if (pitchDelaySlider && pitchDelayVal) {
 // ---------- GAME STATE ----------
 let detector = null;
 let animationId = null;
-let gameState = "start"; // start | countdown | playing | paused | end
+let gameState = "start"; // start | countdown | playing | paused | summary
 let battingSide = "right";
 
 let score = 0;
@@ -93,6 +100,9 @@ let pitchTimer = null;
 let countdownTimer = null;
 let countdownActive = false;
 let countdownValue = 3;
+
+let summaryTimer = null;
+let roundSummary = null;
 
 let screenShakeTimer = 0;
 let screenShakeAmount = 0;
@@ -307,6 +317,11 @@ function hideSplashScreen() {
   splashScreen.classList.add("hidden");
 }
 
+function showSplashScreen() {
+  if (!splashScreen) return;
+  splashScreen.classList.remove("hidden");
+}
+
 function clearPitchTimer() {
   if (pitchTimer) {
     clearTimeout(pitchTimer);
@@ -318,6 +333,13 @@ function clearCountdownTimer() {
   if (countdownTimer) {
     clearTimeout(countdownTimer);
     countdownTimer = null;
+  }
+}
+
+function clearSummaryTimer() {
+  if (summaryTimer) {
+    clearTimeout(summaryTimer);
+    summaryTimer = null;
   }
 }
 
@@ -348,13 +370,14 @@ function rotateTip() {
   }
 }
 
-function scheduleNextPitch() {
+function scheduleNextPitch(extraDelayMs = 0) {
   clearPitchTimer();
 
   if (pitchesLeft <= 0) return;
   if (gameState !== "playing") return;
 
-  const delayMs = Math.round((parseFloat(pitchDelaySlider?.value || "1.5")) * 1000);
+  const baseDelayMs = Math.round((parseFloat(pitchDelaySlider?.value || "3.5")) * 1000);
+  const delayMs = baseDelayMs + extraDelayMs;
 
   rotateTip();
 
@@ -371,6 +394,7 @@ function scheduleNextPitch() {
 function resetRound() {
   clearPitchTimer();
   clearCountdownTimer();
+  clearSummaryTimer();
 
   score = 0;
   hits = 0;
@@ -403,6 +427,7 @@ function resetRound() {
 
   countdownActive = false;
   countdownValue = 3;
+  roundSummary = null;
 
   updateHud();
 
@@ -429,6 +454,55 @@ function getFunHitText(resultLabel, distanceFt) {
   if (distanceFt >= 95) return `BIG SMASH! ${distanceFt} FT`;
   if (distanceFt >= 70) return `NICE HIT! ${distanceFt} FT`;
   return `${resultLabel} ${distanceFt} FT`;
+}
+
+function buildRoundSummary() {
+  let title = "Great Job!";
+  let message = "You played a strong round.";
+  let tip = "Try smooth swings and good timing for longer hits.";
+
+  if (homeRuns >= 2) {
+    title = "Home Run Hero!";
+    message = `You blasted ${homeRuns} home runs!`;
+    tip = "Big upward swings can help launch the ball farther.";
+  } else if (bestDistanceFt >= 130) {
+    title = "Rocket Hitter!";
+    message = `Your best hit traveled ${bestDistanceFt} FT!`;
+    tip = "Fast swings plus strong timing can create big distance.";
+  } else if (hits >= 6) {
+    title = "Contact Champ!";
+    message = `You made contact on ${hits} pitches.`;
+    tip = "Keeping your eye on timing helps you hit more often.";
+  } else if (hits >= 3) {
+    title = "Nice Swinging!";
+    message = `You made ${hits} solid hits this round.`;
+    tip = "Try swinging a little sooner or later to find perfect timing.";
+  } else {
+    title = "Keep Practicing!";
+    message = "Every swing helps you learn.";
+    tip = "A smooth swing and good timing can send the ball farther.";
+  }
+
+  return {
+    title,
+    message,
+    tip
+  };
+}
+
+function endRoundToSummary() {
+  clearPitchTimer();
+  clearCountdownTimer();
+
+  roundSummary = buildRoundSummary();
+  gameState = "summary";
+  showControlsPanel();
+
+  summaryTimer = setTimeout(() => {
+    gameState = "start";
+    showSplashScreen();
+    resetRound();
+  }, 6500);
 }
 
 // ---------- CAMERA / MODEL ----------
@@ -751,13 +825,313 @@ function getTimingFeedback(batTip, ballObj) {
   }
 }
 
+// ---------- BALL ----------
+function createPitch() {
+  if (pitchesLeft <= 0) return;
+  if (gameState !== "playing") return;
+  if (ball) return;
+
+  ball = {
+    x: canvas.width + 30,
+    y: canvas.height * (0.62 + Math.random() * 0.06),
+    vx: -(parseFloat(pitchSpeedSlider?.value || "12")) - Math.random() * 1.2,
+    vy: (Math.random() - 0.5) * 0.18,
+    hit: false,
+    active: true,
+    trail: [],
+    result: "",
+    estimatedDistanceFt: 0,
+    contactX: 0
+  };
+
+  playPitchSound();
+}
+
+function classifyHit(power, upwardSwing) {
+  if (power > 1.9 && upwardSwing > 0.6) {
+    return { label: "HOME RUN!", points: 80, confettiCount: 42, launchBoost: 1.28 };
+  }
+  if (power > 1.5 && upwardSwing > 0.25) {
+    return { label: "TRIPLE!", points: 45, confettiCount: 24, launchBoost: 1.02 };
+  }
+  if (power > 1.08) {
+    return { label: "DOUBLE!", points: 28, confettiCount: 16, launchBoost: 0.88 };
+  }
+  if (power > 0.66) {
+    return { label: "SINGLE!", points: 16, confettiCount: 10, launchBoost: 0.72 };
+  }
+  return { label: "FOUL TIP!", points: 8, confettiCount: 6, launchBoost: 0.54 };
+}
+
+function showHitText(text) {
+  hitText = text;
+  hitTextTimer = 62;
+  flashTimer = text.includes("HOME RUN!") ? 12 : 5;
+}
+
+function showTimingText(text) {
+  timingText = text;
+  timingTextTimer = 48;
+}
+
+function showDistanceText(text) {
+  distanceText = text;
+  distanceTextTimer = 64;
+}
+
+function spawnConfetti(x, y, count) {
+  for (let i = 0; i < count; i++) {
+    confetti.push({
+      x,
+      y,
+      vx: (Math.random() - 0.5) * 9,
+      vy: -Math.random() * 8 - 1.5,
+      size: 4 + Math.random() * 7,
+      life: 22 + Math.random() * 24,
+      color: ["#ff5252", "#ffd54f", "#66bb6a", "#42a5f5", "#ab47bc", "#ff7043"][i % 6]
+    });
+  }
+}
+
+function spawnStars(x, y, label) {
+  const count = label === "HOME RUN!" ? 8 : 4;
+  for (let i = 0; i < count; i++) {
+    floatingStars.push({
+      x: x + (Math.random() - 0.5) * 20,
+      y: y + (Math.random() - 0.5) * 20,
+      vy: -1 - Math.random() * 1.2,
+      life: 24 + Math.random() * 10,
+      size: 10 + Math.random() * 10
+    });
+  }
+}
+
+function triggerHomeRunCelebration(x, y) {
+  screenShakeTimer = 28;
+  screenShakeAmount = 14;
+  flashTimer = 14;
+
+  for (let i = 0; i < 4; i++) {
+    homerBursts.push({
+      x: x + (Math.random() - 0.5) * 120,
+      y: y + (Math.random() - 0.5) * 80,
+      radius: 10,
+      life: 26 + i * 4,
+      color: ["#ffd54f", "#42a5f5", "#ff7043", "#66bb6a"][i % 4]
+    });
+  }
+
+  spawnConfetti(x, y, 100);
+  spawnStars(x, y, "HOME RUN!");
+  spawnStars(x + 80, y - 40, "HOME RUN!");
+  spawnStars(x - 80, y - 20, "HOME RUN!");
+}
+
+function tryHit(batTip) {
+  if (!ball || !ball.active || ball.hit) return;
+
+  const d = Math.hypot(ball.x - batTip.x, ball.y - batTip.y);
+  if (d > CONTACT_DISTANCE) return;
+  if (batVelocity.speed < parseFloat(swingThresholdSlider?.value || "420")) return;
+
+  ball.hit = true;
+
+  const timing = getTimingFeedback(batTip, ball);
+
+  let power = clamp(batVelocity.speed / 700, 0.35, 2.1);
+  power *= timing.powerBonus;
+
+  const upwardSwing = clamp((-batVelocity.y) / 700, -0.4, 1.0);
+
+  let lateral;
+  if (battingSide === "right") {
+    lateral = batVelocity.x >= 0 ? 1 : -1;
+  } else {
+    lateral = batVelocity.x <= 0 ? -1 : 1;
+  }
+
+  const result = classifyHit(power, upwardSwing);
+
+  const baseVX = 9 + power * 8;
+  const baseVY = -(4 + Math.max(0, upwardSwing) * 7 + power * 2.2);
+
+  ball.vx =
+    lateral *
+    baseVX *
+    result.launchBoost *
+    timing.direction +
+    (Math.random() - 0.5) * 1.4;
+
+  ball.vy =
+    baseVY * result.launchBoost +
+    (Math.random() - 0.5) * 1.0;
+
+  ball.result = result.label;
+  ball.contactX = ball.x;
+  ball.estimatedDistanceFt = estimateDistanceFt(power, result.label);
+  currentDistanceFt = 0;
+
+  score += result.points;
+  hits++;
+  pitchesLeft--;
+
+  showHitText(getFunHitText(result.label, ball.estimatedDistanceFt));
+  showTimingText(timing.label);
+  showDistanceText(`${ball.estimatedDistanceFt} FT`);
+
+  spawnConfetti(ball.x, ball.y, result.confettiCount);
+  spawnStars(ball.x, ball.y, result.label);
+
+  if (result.label === "HOME RUN!") {
+    homeRuns++;
+    playHomeRunSound();
+    triggerHomeRunCelebration(ball.x, ball.y);
+    if (instructionChip) instructionChip.textContent = "HOME RUN! That one flew a long way!";
+  } else if (result.label === "TRIPLE!" || result.label === "DOUBLE!") {
+    playBigHitSound();
+    if (instructionChip) instructionChip.textContent = "Big hit! Watch how far it goes!";
+  } else {
+    playHitSound();
+    if (instructionChip) instructionChip.textContent = "Nice contact!";
+  }
+
+  bestDistanceFt = Math.max(bestDistanceFt, ball.estimatedDistanceFt);
+  updateHud();
+}
+
+function resolveMiss() {
+  misses++;
+  pitchesLeft--;
+  ball = null;
+  currentDistanceFt = 0;
+  updateHud();
+  playMissSound();
+
+  if (instructionChip) {
+    instructionChip.textContent = "Miss! Try the next one.";
+  }
+
+  if (pitchesLeft <= 0) {
+    endRoundToSummary();
+  } else {
+    scheduleNextPitch();
+  }
+}
+
+function resolveFinishedHit() {
+  const resultLabel = ball?.result || "";
+  const finalDistance = Math.max(currentDistanceFt, ball?.estimatedDistanceFt || 0);
+
+  bestDistanceFt = Math.max(bestDistanceFt, finalDistance);
+  updateHud();
+
+  ball = null;
+  currentDistanceFt = 0;
+
+  if (instructionChip) {
+    instructionChip.textContent = "Nice! Get ready for the next pitch.";
+  }
+
+  if (pitchesLeft <= 0) {
+    endRoundToSummary();
+    return;
+  }
+
+  if (resultLabel === "HOME RUN!") {
+    scheduleNextPitch(2000);
+  } else {
+    scheduleNextPitch();
+  }
+}
+
+function spawnHomeRunTrail() {
+  if (!ball || ball.result !== "HOME RUN!") return;
+
+  homerTrailParticles.push({
+    x: ball.x,
+    y: ball.y,
+    vx: (Math.random() - 0.5) * 1.5,
+    vy: (Math.random() - 0.5) * 1.5,
+    life: 18 + Math.random() * 8,
+    size: 4 + Math.random() * 5,
+    color: ["#ffd54f", "#ffffff", "#42a5f5", "#ff7043"][Math.floor(Math.random() * 4)]
+  });
+}
+
+function updateBall() {
+  if (!ball || !ball.active) return;
+  if (gameState !== "playing") return;
+
+  if (!ball.hit) {
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    ball.trail.push({ x: ball.x, y: ball.y, a: 0.16 });
+    if (ball.trail.length > 7) ball.trail.shift();
+
+    if (ball.x < -40) {
+      resolveMiss();
+    }
+  } else {
+    ball.vy += GRAVITY;
+    ball.vx *= 0.992;
+    ball.vy *= 0.996;
+
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    ball.trail.push({ x: ball.x, y: ball.y, a: 0.24 });
+    if (ball.trail.length > 16) ball.trail.shift();
+
+    if (ball.result === "HOME RUN!") {
+      spawnHomeRunTrail();
+      spawnHomeRunTrail();
+    }
+
+    if (ball.y > canvas.height + 60 || ball.x < -90 || ball.x > canvas.width + 90) {
+      resolveFinishedHit();
+    }
+  }
+}
+
+function drawBall() {
+  if (!ball || !ball.active) return;
+
+  for (let i = 0; i < ball.trail.length; i++) {
+    const p = ball.trail[i];
+    const alpha = ((i + 1) / ball.trail.length) * p.a;
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, BALL_RADIUS * 0.58, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.save();
+  ctx.shadowBlur = ball.result === "HOME RUN!" ? 24 : 14;
+  ctx.shadowColor = ball.result === "HOME RUN!" ? "#ffd54f" : "#ffffff";
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "#cfd8dc";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, BALL_RADIUS - 2, 0.4, 2.4);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, BALL_RADIUS - 2, 3.6, 5.7);
+  ctx.stroke();
+  ctx.restore();
+}
+
 // ---------- DISTANCE ----------
 function updateDistanceDuringFlight() {
   if (!ball || !ball.hit) return;
 
   const startX = ball.contactX ?? ball.x;
   const travelPx = Math.abs(ball.x - startX);
-  currentDistanceFt = Math.max(ball.estimatedDistanceFt || 0, Math.round(travelPx * 0.22));
+  currentDistanceFt = Math.min(ball.estimatedDistanceFt || 0, Math.round(travelPx * 0.22));
 }
 
 function drawDistanceOverlay() {
@@ -786,11 +1160,6 @@ function drawDistanceOverlay() {
 
     distanceTextTimer--;
   }
-}
-
-function showDistanceText(text) {
-  distanceText = text;
-  distanceTextTimer = 38;
 }
 
 // ---------- MINIMAP ----------
@@ -936,7 +1305,7 @@ function updateAndDrawHomerTrailParticles() {
 
 function drawHitOverlay() {
   if (hitTextTimer > 0) {
-    const scale = 1 + Math.sin((34 - hitTextTimer) * 0.3) * 0.08;
+    const scale = 1 + Math.sin((62 - hitTextTimer) * 0.18) * 0.05;
 
     ctx.save();
     ctx.translate(canvas.width / 2, canvas.height * 0.22);
@@ -946,7 +1315,7 @@ function drawHitOverlay() {
     ctx.lineWidth = 9;
     ctx.strokeStyle = "#14304b";
     ctx.fillStyle = hitText.includes("HOME RUN!") ? "#ffd54f" : "#ffffff";
-    ctx.font = '900 64px "Baloo 2", sans-serif';
+    ctx.font = '900 60px "Baloo 2", sans-serif';
     ctx.strokeText(hitText, 0, 0);
     ctx.fillText(hitText, 0, 0);
     ctx.restore();
@@ -965,7 +1334,7 @@ function drawHitOverlay() {
     if (timingText === "TOO EARLY" || timingText === "TOO LATE") fill = "#ff9f1a";
 
     ctx.fillStyle = fill;
-    ctx.font = '900 40px "Baloo 2", sans-serif';
+    ctx.font = '900 38px "Baloo 2", sans-serif';
     ctx.strokeText(timingText, canvas.width / 2, canvas.height * 0.30);
     ctx.fillText(timingText, canvas.width / 2, canvas.height * 0.30);
     ctx.restore();
@@ -1011,19 +1380,39 @@ function drawStartOverlay() {
   ctx.fillText("Press the button to begin.", canvas.width / 2, canvas.height * 0.41);
 }
 
-function drawEndOverlay() {
-  ctx.fillStyle = "rgba(0,0,0,0.28)";
+function drawSummaryOverlay() {
+  if (!roundSummary) return;
+
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  ctx.save();
   ctx.textAlign = "center";
-  ctx.fillStyle = "#ffd54f";
-  ctx.font = '900 56px "Baloo 2", sans-serif';
-  ctx.fillText("ROUND OVER!", canvas.width / 2, canvas.height * 0.34);
+
+  ctx.fillStyle = "#ffd43b";
+  ctx.font = '900 58px "Baloo 2", sans-serif';
+  ctx.fillText(roundSummary.title, canvas.width / 2, canvas.height * 0.28);
 
   ctx.fillStyle = "#ffffff";
   ctx.font = '900 28px "Nunito", sans-serif';
-  ctx.fillText(`Hits: ${hits}`, canvas.width / 2, canvas.height * 0.43);
-  ctx.fillText(`Best Distance: ${Math.round(bestDistanceFt)} FT`, canvas.width / 2, canvas.height * 0.50);
+  ctx.fillText(roundSummary.message, canvas.width / 2, canvas.height * 0.40);
+
+  ctx.font = '800 24px "Nunito", sans-serif';
+  ctx.fillStyle = "#25a9ff";
+  ctx.fillText(`Best Distance: ${Math.round(bestDistanceFt)} FT`, canvas.width / 2, canvas.height * 0.49);
+
+  ctx.fillStyle = "#2ed573";
+  ctx.fillText(`Hits: ${hits}   •   Home Runs: ${homeRuns}`, canvas.width / 2, canvas.height * 0.56);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '800 22px "Nunito", sans-serif';
+  ctx.fillText(roundSummary.tip, canvas.width / 2, canvas.height * 0.67);
+
+  ctx.fillStyle = "rgba(255,255,255,0.86)";
+  ctx.font = '800 18px "Nunito", sans-serif';
+  ctx.fillText("Returning to start screen...", canvas.width / 2, canvas.height * 0.79);
+
+  ctx.restore();
 }
 
 function drawCountdownOverlay() {
@@ -1162,14 +1551,6 @@ async function loop() {
     updateAndDrawHomerTrailParticles();
     drawHitOverlay();
     drawDistanceOverlay();
-
-    if (pitchesLeft <= 0 && !ball) {
-      gameState = "end";
-      showControlsPanel();
-      if (instructionChip) {
-        instructionChip.textContent = "Round over. Press Start Game to play again.";
-      }
-    }
   } else {
     updateAndDrawConfetti();
     updateAndDrawStars();
@@ -1193,8 +1574,8 @@ async function loop() {
     drawPauseOverlay();
   }
 
-  if (gameState === "end") {
-    drawEndOverlay();
+  if (gameState === "summary") {
+    drawSummaryOverlay();
   }
 
   ctx.restore();
@@ -1203,8 +1584,6 @@ async function loop() {
 
 // ---------- BUTTONS ----------
 async function startOrResumeGame() {
-  console.log("startOrResumeGame fired");
-
   try {
     initAudio();
 
@@ -1213,13 +1592,8 @@ async function startOrResumeGame() {
     }
 
     if (!detector) {
-      console.log("setting up camera...");
       await setupCamera();
-      console.log("camera ready");
-
-      console.log("loading model...");
       await loadModel();
-      console.log("model ready");
     }
 
     hideSplashScreen();
@@ -1288,18 +1662,17 @@ function togglePause() {
 function resetGame() {
   clearPitchTimer();
   clearCountdownTimer();
+  clearSummaryTimer();
   resetRound();
   gameState = "start";
+  showSplashScreen();
   if (pauseBtn) pauseBtn.textContent = "Pause";
-  showControlsPanel();
   if (instructionChip) {
     instructionChip.textContent = "Strong swings can send the ball farther. Timing matters too.";
   }
 }
 
 // ---------- INIT ----------
-console.log("GAME JS LOADED");
-
 if (startBtn) {
   startBtn.onclick = startOrResumeGame;
 }
