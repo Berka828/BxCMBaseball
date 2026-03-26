@@ -40,6 +40,9 @@ let animationId = null;
 let gameState = "start"; // start | countdown | playing | paused | end
 let battingSide = "right";
 
+let introMusic = null;
+let introMusicStarted = false;
+
 let score = 0;
 let hits = 0;
 let misses = 0;
@@ -97,6 +100,51 @@ const SKELETON_OFFSET_X = -300;
 // ---------- AUDIO ----------
 let audioCtx = null;
 let soundEnabled = true;
+
+function setupIntroMusic() {
+  if (introMusic) return;
+
+  introMusic = new Audio("./intro-theme.mp3");
+  introMusic.loop = false;
+  introMusic.volume = 0.45;
+  introMusic.preload = "auto";
+}
+
+async function playIntroMusic() {
+  try {
+    setupIntroMusic();
+    if (!introMusic) return;
+
+    introMusic.currentTime = 0;
+    introMusic.volume = 0.45;
+    await introMusic.play();
+    introMusicStarted = true;
+  } catch (err) {
+    console.warn("Intro music could not play:", err);
+  }
+}
+
+function fadeOutIntroMusic(duration = 1800) {
+  if (!introMusic || introMusic.paused) return;
+
+  const startVolume = introMusic.volume;
+  const steps = 24;
+  const stepTime = duration / steps;
+  let currentStep = 0;
+
+  const fadeTimer = setInterval(() => {
+    currentStep++;
+    const t = currentStep / steps;
+    introMusic.volume = Math.max(0, startVolume * (1 - t));
+
+    if (currentStep >= steps) {
+      clearInterval(fadeTimer);
+      introMusic.pause();
+      introMusic.currentTime = 0;
+      introMusic.volume = 0.45;
+    }
+  }, stepTime);
+}
 
 function initAudio() {
   if (!audioCtx) {
@@ -613,6 +661,9 @@ function drawBackground() {
   if (!stadiumBgLoaded) {
     ctx.fillStyle = "#1e2f4d";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     return;
   }
 
@@ -633,6 +684,10 @@ function drawBackground() {
   const offsetY = (canvas.height - drawHeight) / 2;
 
   ctx.drawImage(stadiumBg, offsetX, offsetY, drawWidth, drawHeight);
+
+  // dark overlay so skeleton, ball, text, and effects pop more
+  ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
 // ---------- SKELETON SCALING ----------
@@ -1433,6 +1488,8 @@ function startCountdown() {
   instructionChip.textContent = "Get set...";
   hideControlsPanel();
 
+  fadeOutIntroMusic(1800);
+
   const tick = () => {
     if (!countdownActive) return;
 
@@ -1652,6 +1709,11 @@ startBtn.onclick = startOrResumeGame;
 if (splashStartBtn) {
   splashStartBtn.addEventListener("click", async () => {
     console.log("SPLASH START CLICKED");
+
+    if (!introMusicStarted) {
+      await playIntroMusic();
+    }
+
     await startOrResumeGame();
   });
 }
