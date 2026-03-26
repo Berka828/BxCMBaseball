@@ -70,7 +70,7 @@ let screenShakeAmount = 0;
 
 let bgTick = 0;
 let stadiumBg = new Image();
-stadiumBg.src = "stadium-bg.png"; // rename to your actual PNG filename
+stadiumBg.src = "./stadium-bg.png"; // rename to your actual PNG filename
 let stadiumBgLoaded = false;
 
 stadiumBg.onload = () => {
