@@ -565,15 +565,19 @@ function endRoundToSummary() {
   clearPitchTimer();
   clearCountdownTimer();
 
-  roundSummary = buildRoundSummary();
-  gameState = "summary";
-  showControlsPanel();
-
+  // small pause after the final hit/miss before showing summary
   summaryTimer = setTimeout(() => {
-    gameState = "start";
-    showSplashScreen();
-    resetRound();
-  }, 7000);
+    roundSummary = buildRoundSummary();
+    gameState = "summary";
+    showControlsPanel();
+
+    // stay on summary, then return to splash
+    summaryTimer = setTimeout(() => {
+      gameState = "start";
+      showSplashScreen();
+      resetRound();
+    }, 7000);
+  }, 2200); // 
 }
 
 // ---------- CAMERA / MODEL ----------
