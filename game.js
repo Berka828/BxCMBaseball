@@ -1117,15 +1117,18 @@ function resolveFinishedHit() {
   }
 
   if (pitchesLeft <= 0) {
-    const endDelay = resultLabel === "HOME RUN!"
-      ? HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS
-      : BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS;
+  const endDelay =
+    resultLabel === "HOME RUN!"
+      ? HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS + 1200
+      : resultLabel === "TRIPLE!" || resultLabel === "DOUBLE!"
+        ? BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS + 900
+        : HIT_FEEDBACK_MS + FEEDBACK_FADE_MS + 700;
 
-    pitchTimer = setTimeout(() => {
-      endRoundToSummary();
-    }, endDelay);
-    return;
-  }
+  pitchTimer = setTimeout(() => {
+    endRoundToSummary();
+  }, endDelay);
+  return;
+}
 
   if (resultLabel === "HOME RUN!") {
     schedulePitchAfterFeedback(HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS, 2000);
