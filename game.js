@@ -590,23 +590,7 @@ function drawIndoorField() {
 }
 
 function drawBackground() {
-  bgTick += 1;
-
-  const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.55);
-  skyGrad.addColorStop(0, "#2c3d57");
-  skyGrad.addColorStop(1, "#b8c8d6");
-  ctx.fillStyle = skyGrad;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  drawRoofAndLights();
-  drawWindowScene(canvas.height * 0.16, canvas.height * 0.55);
-  drawFenceWall(canvas.height * 0.48);
-  drawIndoorField();
-
-  const haze = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  haze.addColorStop(0, "rgba(255,255,255,0.06)");
-  haze.addColorStop(1, "rgba(0,0,0,0.06)");
-  ctx.fillStyle = haze;
+  ctx.fillStyle = "#0b1f3a"; // nice clean dark blue (or change to whatever)
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
