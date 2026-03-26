@@ -481,3 +481,87 @@ body{background:#000}
     bottom:120px;
   }
 }
+/* =========================
+   EXTRA POLISH
+========================= */
+
+.stageWrap::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at 20% 15%, rgba(255,212,59,.06), transparent 20%),
+    radial-gradient(circle at 80% 20%, rgba(37,169,255,.06), transparent 22%),
+    radial-gradient(circle at 50% 82%, rgba(125,77,255,.08), transparent 24%);
+  z-index:2;
+}
+
+.compactTopBar{
+  z-index:25;
+}
+
+.compactTitleChip{
+  box-shadow:0 10px 28px rgba(0,0,0,.22);
+}
+
+.bottomStatsBar{
+  z-index:40;
+}
+
+.bottomStatCard{
+  position:relative;
+  overflow:hidden;
+}
+
+.bottomStatCard::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,0));
+  pointer-events:none;
+}
+
+.miniMapCard{
+  box-shadow:0 12px 28px rgba(0,0,0,.26);
+}
+
+.instructionChip{
+  border:2px solid rgba(255,255,255,.08);
+}
+
+.controlDock{
+  box-shadow:0 12px 28px rgba(0,0,0,.22);
+}
+
+.splashStartBtn{
+  text-transform:uppercase;
+}
+
+@keyframes statFloat {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-2px); }
+  100% { transform: translateY(0px); }
+}
+
+.statYellow,
+.statBlue,
+.statPurple,
+.statGreen{
+  animation:statFloat 3.5s ease-in-out infinite;
+}
+
+.statBlue{ animation-delay:.2s; }
+.statPurple{ animation-delay:.4s; }
+.statGreen{ animation-delay:.6s; }
+
+/* subtle summary feel */
+.summaryGlow{
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at center, rgba(255,212,59,.10), transparent 30%),
+    radial-gradient(circle at 30% 30%, rgba(37,169,255,.08), transparent 18%),
+    radial-gradient(circle at 70% 35%, rgba(125,77,255,.08), transparent 18%);
+}
