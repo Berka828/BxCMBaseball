@@ -13,7 +13,7 @@ const rightHandBtn = document.getElementById("rightHandBtn");
 const leftHandBtn = document.getElementById("leftHandBtn");
 const rightPanel = document.querySelector(".rightPanel");
 
-const scoreEl = document.getElementById("scoreEl");
+const scoreEl = document.getElementById("scoreEl");f
 const pitchesEl = document.getElementById("pitchesEl");
 const hitsEl = document.getElementById("hitsEl");
 const missesEl = document.getElementById("missesEl");
@@ -69,12 +69,28 @@ let screenShakeTimer = 0;
 let screenShakeAmount = 0;
 
 let bgTick = 0;
+
 let stadiumBg = new Image();
-stadiumBg.src = "./stadium-bg.png"; // rename to your actual PNG filename
 let stadiumBgLoaded = false;
 
 stadiumBg.onload = () => {
   stadiumBgLoaded = true;
+  console.log("BACKGROUND LOADED OK");
+};
+
+stadiumBg.onerror = () => {
+  console.error("BACKGROUND FAILED TO LOAD");
+};
+
+stadiumBg.src = "./stadium-bg.png";
+
+function drawBackground() {
+  ctx.fillStyle = "#1e2f4d";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (!stadiumBgLoaded) return;
+
+  ctx.drawImage(stadiumBg, 0, 0, canvas.width, canvas.height);
 };
 
 const BALL_RADIUS = 14;
