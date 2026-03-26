@@ -13,7 +13,7 @@ const rightHandBtn = document.getElementById("rightHandBtn");
 const leftHandBtn = document.getElementById("leftHandBtn");
 const rightPanel = document.querySelector(".rightPanel");
 
-const scoreEl = document.getElementById("scoreEl");f
+const scoreEl = document.getElementById("scoreEl");
 const pitchesEl = document.getElementById("pitchesEl");
 const hitsEl = document.getElementById("hitsEl");
 const missesEl = document.getElementById("missesEl");
@@ -70,37 +70,14 @@ let screenShakeAmount = 0;
 
 let bgTick = 0;
 
-let stadiumBg = new Image();
-let stadiumBgLoaded = false;
-
-stadiumBg.onload = () => {
-  stadiumBgLoaded = true;
-  console.log("BACKGROUND LOADED OK");
-};
-
-stadiumBg.onerror = () => {
-  console.error("BACKGROUND FAILED TO LOAD");
-};
-
-stadiumBg.src = "./stadium-bg.png";
-
-function drawBackground() {
-  ctx.fillStyle = "#1e2f4d";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  if (!stadiumBgLoaded) return;
-
-  ctx.drawImage(stadiumBg, 0, 0, canvas.width, canvas.height);
-};
-
 const BALL_RADIUS = 14;
 const GRAVITY = 0.44;
 const CONTACT_DISTANCE = 68;
 const BAT_LENGTH = 132;
 
 const SKELETON_SCALE = 0.68;
-const SKELETON_OFFSET_Y = 140;
-const SKELETON_OFFSET_X = -300;
+const SKELETON_OFFSET_Y = 100;
+const SKELETON_OFFSET_X = 0;
 
 // ---------- AUDIO ----------
 let audioCtx = null;
@@ -613,12 +590,24 @@ function drawIndoorField() {
 }
 
 function drawBackground() {
-  if (stadiumBgLoaded) {
-    ctx.drawImage(stadiumBg, 0, 0, canvas.width, canvas.height);
-  } else {
-    ctx.fillStyle = "#1e2f4d";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
+  bgTick += 1;
+
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height * 0.55);
+  skyGrad.addColorStop(0, "#2c3d57");
+  skyGrad.addColorStop(1, "#b8c8d6");
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  drawRoofAndLights();
+  drawWindowScene(canvas.height * 0.16, canvas.height * 0.55);
+  drawFenceWall(canvas.height * 0.48);
+  drawIndoorField();
+
+  const haze = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  haze.addColorStop(0, "rgba(255,255,255,0.06)");
+  haze.addColorStop(1, "rgba(0,0,0,0.06)");
+  ctx.fillStyle = haze;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
 // ---------- SKELETON SCALING ----------
