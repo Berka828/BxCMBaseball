@@ -1629,5 +1629,3 @@ updateHud();
 resizeCanvas();
 pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
 showControlsPanel();
-
-
