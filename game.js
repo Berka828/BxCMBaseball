@@ -1621,6 +1621,10 @@ async function startOrResumeGame() {
   try {
     initAudio();
 
+    if (!introMusicStarted) {
+      await playIntroMusic();
+    }
+
     if (!detector) {
       console.log("setting up camera...");
       await setupCamera();
@@ -1635,8 +1639,8 @@ async function startOrResumeGame() {
 
     if (gameState === "paused") {
       gameState = "playing";
-      pauseBtn.textContent = "Pause Game";
-      instructionChip.textContent = "Game resumed.";
+      if (pauseBtn) pauseBtn.textContent = "Pause Game";
+      if (instructionChip) instructionChip.textContent = "Game resumed.";
       hideControlsPanel();
       if (!ball) scheduleNextPitch();
       playStartSound();
@@ -1645,7 +1649,7 @@ async function startOrResumeGame() {
     }
 
     resetRound();
-    pauseBtn.textContent = "Pause Game";
+    if (pauseBtn) pauseBtn.textContent = "Pause Game";
     playStartSound();
     startCountdown();
 
@@ -1654,7 +1658,7 @@ async function startOrResumeGame() {
     }
   } catch (err) {
     console.error("START ERROR:", err);
-    alert("Start failed. Open browser console with F12 to see the error.");
+    alert("Start failed. See console.");
   }
 }
 
@@ -1706,17 +1710,6 @@ function resetGame() {
 
 startBtn.onclick = startOrResumeGame;
 
-if (splashStartBtn) {
-  splashStartBtn.addEventListener("click", async () => {
-    console.log("SPLASH START CLICKED");
-
-    if (!introMusicStarted) {
-      await playIntroMusic();
-    }
-
-    await startOrResumeGame();
-  });
-}
 
 pauseBtn.onclick = togglePause;
 resetBtn.onclick = resetGame;
