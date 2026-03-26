@@ -1703,7 +1703,7 @@ async function startOrResumeGame() {
     }
   } catch (err) {
     console.error("START ERROR:", err);
-    alert("Start failed. Open browser console with F12 to see the error.");
+    alert("Start failed. See console.");
   }
 }
 
@@ -1787,3 +1787,24 @@ updateHud();
 resizeCanvas();
 pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
 showControlsPanel();
+
+console.log("GAME JS LOADED");
+console.log("splashStartBtn =", splashStartBtn);
+console.log("startBtn =", startBtn);
+
+startBtn.onclick = startOrResumeGame;
+
+if (splashStartBtn) {
+  splashStartBtn.addEventListener("click", async () => {
+    console.log("SPLASH START CLICKED");
+
+    if (!introMusicStarted) {
+      await playIntroMusic();
+    }
+
+    await startOrResumeGame();
+  });
+}
+
+pauseBtn.onclick = togglePause;
+resetBtn.onclick = resetGame;
