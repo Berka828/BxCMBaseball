@@ -5,255 +5,235 @@ const ctx = canvas.getContext("2d");
 const miniMapCanvas = document.getElementById("miniMapCanvas");
 const miniCtx = miniMapCanvas.getContext("2d");
 
-const homeRunsEl = document.getElementById("homeRunsEl");
-const bestHitEl = document.getElementById("bestHitEl");
-
+// UI Elements
 const splashScreen = document.getElementById("splashScreen");
 const splashStartBtn = document.getElementById("splashStartBtn");
-
 const startBtn = document.getElementById("startBtn");
-const pauseBtn = document.getElementById("pauseBtn");
-const resetBtn = document.getElementById("resetBtn");
-const muteBtn = document.getElementById("muteBtn");
-const rightHandBtn = document.getElementById("rightHandBtn");
-const leftHandBtn = document.getElementById("leftHandBtn");
-const rightPanel = document.querySelector(".rightPanel");
-
+const instructionChip = document.getElementById("instructionChip");
 const scoreEl = document.getElementById("scoreEl");
 const pitchesEl = document.getElementById("pitchesEl");
-const hitsEl = document.getElementById("hitsEl");
-const missesEl = document.getElementById("missesEl");
-const veloEl = document.getElementById("veloEl");
-const instructionChip = document.getElementById("instructionChip");
+const homeRunsEl = document.getElementById("homeRunsEl");
 
-// --- MINIMALIST SAFETY CHECKS ---
-// These prevent the "Cannot set properties of null" error seen in your screenshot
-const pitchSpeedSlider = document.getElementById("pitchSpeed");
-const swingThresholdSlider = document.getElementById("swingThreshold");
-const pitchDelaySlider = document.getElementById("pitchDelay");
-
-const pitchSpeedVal = document.getElementById("pitchSpeedVal");
-const swingThresholdVal = document.getElementById("swingThresholdVal");
-const pitchDelayVal = document.getElementById("pitchDelayVal");
-
-if (pitchSpeedSlider && pitchSpeedVal) {
-    pitchSpeedSlider.oninput = () => pitchSpeedVal.textContent = pitchSpeedSlider.value;
-}
-if (swingThresholdSlider && swingThresholdVal) {
-    swingThresholdSlider.oninput = () => swingThresholdVal.textContent = swingThresholdSlider.value;
-}
-if (pitchDelaySlider && pitchDelayVal) {
-    pitchDelaySlider.oninput = () => pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
-}
-
-// Default values if sliders are missing from the UI
-const getPitchSpeed = () => pitchSpeedSlider ? parseFloat(pitchSpeedSlider.value) : 12;
-const getSwingThreshold = () => swingThresholdSlider ? parseFloat(swingThresholdSlider.value) : 400;
-const getPitchDelay = () => pitchDelaySlider ? parseFloat(pitchDelaySlider.value) : 2.5;
-
+// Game State
 let detector = null;
 let animationId = null;
-let gameState = "start"; 
-let battingSide = "right";
-
-let introMusic = null;
-let introMusicStarted = false;
-
+let gameState = "start"; // start | countdown | playing | paused
 let score = 0;
-let hits = 0;
-let misses = 0;
-let bestExitVelo = 0;
 let pitchesLeft = 10;
-const roundPitches = 10;
-
-let prevBatPoint = null;
-let batVelocity = { x: 0, y: 0, speed: 0 };
-
-let ball = null;
-let hitText = "";
-let hitTextTimer = 0;
-let flashTimer = 0;
-let timingText = "";
-let timingTextTimer = 0;
 let homeRuns = 0;
+let countdownValue = 3;
 
-let handRaiseHoldMs = 0;
-let lastRaiseCheckTime = 0;
-let autoStartTriggered = false;
-
-let confetti = [];
-let floatingStars = [];
-let homerBursts = [];
-let homerTrailParticles = [];
-let batTrail = [];
-
-let pitchTimer = null;
-let countdownTimer = null;
-let countdownActive = false;
-let countdownValue = 5;
-
-let screenShakeTimer = 0;
-let screenShakeAmount = 0;
-
-let bgTick = 0;
+// Physics & Assets
+let ball = null;
 let stadiumBg = new Image();
 let stadiumBgLoaded = false;
-
 stadiumBg.onload = () => { stadiumBgLoaded = true; };
-stadiumBg.src = "./stadium-bg.png"; // Ensure this filename is exact!
+stadiumBg.src = "./stadium-bg.png";
 
-const BALL_RADIUS = 14;
-const GRAVITY = 0.44;
-const CONTACT_DISTANCE = 75;
-const BAT_LENGTH = 140;
+const BALL_RADIUS = 12;
+const GRAVITY = 0.4;
+const PITCH_SPEED = 12;
 
-const SKELETON_SCALE = 0.7;
-const SKELETON_OFFSET_Y = 120;
-const SKELETON_OFFSET_X = -300;
-
-// ---------- AUDIO ----------
-let audioCtx = null;
-let soundEnabled = true;
-
-function initAudio() {
-  if (!audioCtx) {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (AudioCtx) audioCtx = new AudioCtx();
-  }
-  if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
-}
-
-function tone(freq, duration, type = "sine", gainValue = 0.1, startTime = 0) {
-  if (!soundEnabled || !audioCtx) return;
-  const now = audioCtx.currentTime + startTime;
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.type = type;
-  osc.frequency.setValueAtTime(freq, now);
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(gainValue, now + 0.01);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  osc.start(now);
-  osc.stop(now + duration + 0.05);
-}
-
-// SFX
-function playStartSound() { tone(523, 0.1, "triangle", 0.1, 0); tone(659, 0.1, "triangle", 0.1, 0.08); }
-function playPitchSound() { tone(200, 0.1, "sawtooth", 0.05); }
-function playMissSound() { tone(150, 0.2, "square", 0.05); }
-function playGoSound() { tone(880, 0.1, "triangle", 0.1); }
-
-// ---------- LOGIC ----------
-function hideSplashScreen() { if (splashScreen) splashScreen.classList.add("hidden"); }
-
-async function setupCamera() {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "user", width: 1280, height: 720 }, audio: false
-  });
-  video.srcObject = stream;
-  await new Promise(res => video.onloadedmetadata = res);
-  await video.play();
-}
-
-async function loadModel() {
-  await tf.ready();
-  detector = await poseDetection.createDetector(
-    poseDetection.SupportedModels.MoveNet,
-    { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
-  );
-}
-
-function createPitch() {
-  if (pitchesLeft <= 0 || ball) return;
-  ball = { 
-    x: canvas.width + 30, 
-    y: canvas.height * 0.65, 
-    vx: -getPitchSpeed(), 
-    vy: (Math.random() - 0.5) * 0.5, 
-    hit: false, active: true, trail: [] 
-  };
-  playPitchSound();
-}
+// ---------- INITIALIZATION ----------
 
 async function startOrResumeGame() {
-  hideSplashScreen();
-  if (instructionChip) instructionChip.textContent = "Starting Camera...";
-  
-  try {
-    initAudio();
-    if (!detector) {
-      await setupCamera();
-      await loadModel();
+    if (splashScreen) splashScreen.classList.add("hidden");
+    if (instructionChip) instructionChip.textContent = "Loading AI & Camera...";
+
+    try {
+        if (!detector) {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "user", width: 1280, height: 720 },
+                audio: false
+            });
+            video.srcObject = stream;
+            await video.play();
+
+            await tf.ready();
+            detector = await poseDetection.createDetector(
+                poseDetection.SupportedModels.MoveNet,
+                { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
+            );
+        }
+        
+        resetGame();
+        startCountdown();
+        if (!animationId) loop();
+    } catch (e) {
+        console.error(e);
+        alert("Startup failed. Please ensure camera access is allowed.");
     }
-    
-    if (gameState === "paused") {
-      gameState = "playing";
-    } else {
-      resetRound();
-      startCountdown();
-    }
-    if (!animationId) loop();
-  } catch (e) {
-    console.error(e);
-    alert("Camera failed. Check permissions.");
-  }
 }
 
-function startCountdown() {
-  gameState = "countdown";
-  countdownValue = 3;
-  const tick = () => {
-    if (countdownValue > 0) {
-      countdownValue--;
-      setTimeout(tick, 1000);
-    } else {
-      playGoSound();
-      gameState = "playing";
-      createPitch();
-    }
-  };
-  tick();
-}
-
-function resetRound() {
-  score = 0; hits = 0; misses = 0; homeRuns = 0; pitchesLeft = 10;
-  ball = null; gameState = "playing";
-  updateHud();
+function resetGame() {
+    score = 0;
+    pitchesLeft = 10;
+    homeRuns = 0;
+    ball = null;
+    updateHud();
 }
 
 function updateHud() {
-  if (scoreEl) scoreEl.textContent = score;
-  if (pitchesEl) pitchesEl.textContent = pitchesLeft;
-  if (hitsEl) hitsEl.textContent = hits;
-  if (homeRunsEl) homeRunsEl.textContent = homeRuns;
+    if (scoreEl) scoreEl.textContent = score;
+    if (pitchesEl) pitchesEl.textContent = pitchesLeft;
+    if (homeRunsEl) homeRunsEl.textContent = homeRuns;
 }
 
-// --- SIMPLIFIED DRAWING ---
-function loop() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  
-  // Background
-  if (stadiumBgLoaded) ctx.drawImage(stadiumBg, 0, 0, canvas.width, canvas.height);
-  else { ctx.fillStyle = "#121212"; ctx.fillRect(0, 0, canvas.width, canvas.height); }
-
-  // Game Logic Here (Pose + Ball)
-  if (gameState === "playing") {
-      if (ball) {
-          ball.x += ball.vx;
-          ctx.fillStyle = "white";
-          ctx.beginPath(); ctx.arc(ball.x, ball.y, 10, 0, Math.PI*2); ctx.fill();
-          if (ball.x < -20) { ball = null; misses++; pitchesLeft--; updateHud(); setTimeout(createPitch, 1500); }
-      }
-  }
-
-  animationId = requestAnimationFrame(loop);
+function startCountdown() {
+    gameState = "countdown";
+    countdownValue = 3;
+    const tick = () => {
+        if (countdownValue > 0) {
+            if (instructionChip) instructionChip.textContent = `Get Ready... ${countdownValue}`;
+            countdownValue--;
+            setTimeout(tick, 1000);
+        } else {
+            gameState = "playing";
+            if (instructionChip) instructionChip.textContent = "SWING!";
+            spawnBall();
+        }
+    };
+    tick();
 }
 
-// --- INITIALIZE BUTTONS ---
+// ---------- GAMEPLAY ----------
+
+function spawnBall() {
+    if (pitchesLeft <= 0) {
+        gameState = "start";
+        if (instructionChip) instructionChip.textContent = "Game Over! Press Start to play again.";
+        return;
+    }
+    ball = {
+        x: canvas.width + 50,
+        y: canvas.height * 0.6,
+        vx: -PITCH_SPEED,
+        vy: (Math.random() - 0.5) * 2,
+        hit: false
+    };
+}
+
+function checkHit(points) {
+    if (!ball || ball.hit) return;
+
+    // We check the wrists from the MoveNet points
+    const wrist = points.right_wrist || points.left_wrist;
+    if (!wrist) return;
+
+    const dist = Math.hypot(ball.x - wrist.x, ball.y - wrist.y);
+    
+    // If "bat" (wrist) is close to ball and moving fast
+    if (dist < 80) {
+        ball.hit = true;
+        ball.vx = 15 + Math.random() * 10;
+        ball.vy = -10 - Math.random() * 10;
+        
+        score += 100;
+        if (ball.vy < -15) {
+            homeRuns++;
+            if (instructionChip) instructionChip.textContent = "HOME RUN!!";
+        }
+        pitchesLeft--;
+        updateHud();
+    }
+}
+
+// ---------- DRAWING ----------
+
+function drawFieldMap() {
+    const w = miniMapCanvas.width;
+    const h = miniMapCanvas.height;
+    
+    miniCtx.clearRect(0, 0, w, h);
+    
+    // Draw Grass
+    miniCtx.fillStyle = "#2d5a27";
+    miniCtx.beginPath();
+    miniCtx.moveTo(w/2, h - 10); // Home
+    miniCtx.lineTo(10, h/2);     // 3rd
+    miniCtx.lineTo(w/2, 10);     // Center field
+    miniCtx.lineTo(w - 10, h/2); // 1st
+    miniCtx.closePath();
+    miniCtx.fill();
+    miniCtx.strokeStyle = "white";
+    miniCtx.stroke();
+
+    // Draw Ball on Map
+    if (ball) {
+        // Map main X to mini X, main Y to mini Y
+        const miniX = (ball.x / canvas.width) * w;
+        const miniY = (ball.y / canvas.height) * h;
+        
+        miniCtx.fillStyle = "white";
+        miniCtx.shadowBlur = 5;
+        miniCtx.shadowColor = "white";
+        miniCtx.beginPath();
+        miniCtx.arc(miniX, miniY, 4, 0, Math.PI * 2);
+        miniCtx.fill();
+        miniCtx.shadowBlur = 0;
+    }
+}
+
+async function loop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 1. Background
+    if (stadiumBgLoaded) {
+        ctx.drawImage(stadiumBg, 0, 0, canvas.width, canvas.height);
+    } else {
+        ctx.fillStyle = "#333";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // 2. AI Tracking
+    if (detector && (gameState === "playing" || gameState === "countdown")) {
+        const poses = await detector.estimatePoses(video, { flipHorizontal: true });
+        if (poses.length > 0) {
+            const p = poses[0].keypoints.reduce((acc, k) => {
+                if (k.score > 0.3) acc[k.name] = k;
+                return acc;
+            }, {});
+            
+            // Draw simple joints for feedback
+            ctx.fillStyle = "cyan";
+            for (let name in p) {
+                ctx.beginPath();
+                ctx.arc(p[name].x, p[name].y, 5, 0, Math.PI*2);
+                ctx.fill();
+            }
+            if (gameState === "playing") checkHit(p);
+        }
+    }
+
+    // 3. Ball Physics
+    if (ball) {
+        ball.x += ball.vx;
+        ball.y += ball.vy;
+        if (ball.hit) ball.vy += GRAVITY;
+
+        ctx.fillStyle = "white";
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Reset ball if it leaves screen
+        if (ball.x < -50 || ball.x > canvas.width + 100 || ball.y > canvas.height + 50) {
+            if (!ball.hit) {
+                pitchesLeft--;
+                updateHud();
+            }
+            ball = null;
+            setTimeout(spawnBall, 1000);
+        }
+    }
+
+    // 4. Update Minimap
+    drawFieldMap();
+
+    animationId = requestAnimationFrame(loop);
+}
+
+// ---------- LISTENERS ----------
+
 if (splashStartBtn) splashStartBtn.onclick = startOrResumeGame;
 if (startBtn) startBtn.onclick = startOrResumeGame;
-if (pauseBtn) pauseBtn.onclick = () => { gameState = gameState === "playing" ? "paused" : "playing"; };
-
-updateHud();
