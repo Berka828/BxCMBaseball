@@ -39,80 +39,86 @@
       </div>
     </div>
 
-    <div class="overlay topBar">
+    <div class="overlay topBar compactTopBar">
       <div class="brandChip">
-        <img src="./BxCM_Logo_FullColor_dark-backgrounds.png" alt="Bronx Children's Museum logo" class="brandLogo" />
+        <img src="./bxcm-logo.png" alt="Bronx Children's Museum logo" class="brandLogo" />
       </div>
 
-      <div class="titleChip">
+      <div class="titleChip compactTitleChip">
         <div class="titleMain">BxCM JR. SLUGGERS ACADEMY</div>
-        <div class="titleSub">Swing big. Make contact. Chase the high score.</div>
-      </div>
-
-      <div class="scoreChip">
-        <div class="scoreLine"><span>Score</span><strong id="scoreEl">0</strong></div>
-        <div class="scoreLine"><span>Pitches</span><strong id="pitchesEl">10</strong></div>
+        <div class="titleSub">Swing big. Send it far. Learn through play.</div>
       </div>
     </div>
 
-    <div class="overlay leftHud">
-      <div class="hudCard hudYellow">
-        <div class="hudLabel">Hits</div>
-        <div class="hudValue" id="hitsEl">0</div>
+    <div class="overlay lowerMiniMap">
+      <div class="miniMapCard">
+        <div class="miniMapTitle">Ball Path</div>
+        <canvas id="miniMapCanvas" width="220" height="130"></canvas>
       </div>
-      <div class="hudCard hudPurple">
-        <div class="hudLabel">Misses</div>
-        <div class="hudValue" id="missesEl">0</div>
+    </div>
+
+    <div class="overlay bottomStatsBar">
+      <div class="bottomStatCard statYellow">
+        <div class="bottomStatLabel">Pitches Left</div>
+        <div class="bottomStatValue" id="pitchesEl">10</div>
       </div>
-      <div class="hudCard hudBlue">
-        <div class="hudLabel">Best EV</div>
-        <div class="hudValue" id="veloEl">0</div>
+
+      <div class="bottomStatCard statBlue">
+        <div class="bottomStatLabel">Hits</div>
+        <div class="bottomStatValue" id="hitsEl">0</div>
       </div>
-    </div><div class="overlay miniMapWrap lowerMiniMap">
-  <div class="miniMapCard">
-    <div class="miniMapTitle">Ball Path</div>
-    <canvas id="miniMapCanvas" width="220" height="130"></canvas>
-  </div>
-</div>
 
-<div class="overlay bottomStatsBar">
-  <div class="bottomStatCard">
-    <div class="bottomStatLabel">Pitches</div>
-    <div class="bottomStatValue" id="pitchesEl">10</div>
-  </div>
+      <div class="bottomStatCard statPurple">
+        <div class="bottomStatLabel">Home Runs</div>
+        <div class="bottomStatValue" id="homeRunsEl">0</div>
+      </div>
 
-  <div class="bottomStatCard">
-    <div class="bottomStatLabel">Hits</div>
-    <div class="bottomStatValue" id="hitsEl">0</div>
-  </div>
+      <div class="bottomStatCard statGreen">
+        <div class="bottomStatLabel">Best Distance</div>
+        <div class="bottomStatValue" id="bestHitEl">0 FT</div>
+      </div>
+    </div>
 
-  <div class="bottomStatCard homerCard">
-    <div class="bottomStatLabel">Home Runs</div>
-    <div class="bottomStatValue" id="homeRunsEl">0</div>
-  </div>
+    <div class="overlay controlDock">
+      <button id="startBtn">Start Game</button>
+      <button id="pauseBtn" class="secondary">Pause</button>
+      <button id="resetBtn" class="secondary">Reset</button>
+      <button id="muteBtn" class="secondary blueBtn">Sound: On</button>
 
-  <div class="bottomStatCard">
-    <div class="bottomStatLabel">Best Hit</div>
-    <div class="bottomStatValue" id="bestHitEl">0</div>
-  </div>
-</div>
+      <div class="sideToggle">
+        <button id="rightHandBtn" class="sideBtn active">Right</button>
+        <button id="leftHandBtn" class="sideBtn">Left</button>
+      </div>
 
-<div class="overlay controlDock">
-  <button id="startBtn">Start Game</button>
-  <button id="pauseBtn" class="secondary">Pause Game</button>
-  <button id="resetBtn" class="secondary">Reset Game</button>
-  <button id="muteBtn" class="secondary blueBtn">Sound: On</button>
+      <div class="sliderDock">
+        <div class="sliderWrap">
+          <label for="pitchSpeed">Pitch Speed <span id="pitchSpeedVal">10.5</span></label>
+          <input id="pitchSpeed" type="range" min="7" max="15" value="10.5" step="0.5" />
+        </div>
 
-  <div class="sideToggle">
-    <button id="rightHandBtn" class="sideBtn active">Right</button>
-    <button id="leftHandBtn" class="sideBtn">Left</button>
-  </div>
-</div>
+        <div class="sliderWrap">
+          <label for="swingThreshold">Swing Threshold <span id="swingThresholdVal">420</span></label>
+          <input id="swingThreshold" type="range" min="250" max="700" value="420" step="10" />
+        </div>
 
-    <div class="overlay bottomBar">
+        <div class="sliderWrap">
+          <label for="pitchDelay">Pitch Reset <span id="pitchDelayVal">1.5s</span></label>
+          <input id="pitchDelay" type="range" min="1.0" max="3.5" value="1.5" step="0.1" />
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay bottomBar educationalBar">
       <div class="instructionChip" id="instructionChip">
-        Big upward swings can turn doubles into triples. Home runs trigger a giant celebration.
+        Strong swings can send the ball farther. Timing matters too.
       </div>
+    </div>
+
+    <!-- hidden legacy fields kept for compatibility -->
+    <div style="display:none">
+      <span id="scoreEl">0</span>
+      <span id="missesEl">0</span>
+      <span id="veloEl">0</span>
     </div>
   </div>
 
