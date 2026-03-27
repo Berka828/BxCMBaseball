@@ -1,122 +1,345 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>BxCM Jr. Sluggers Academy</title>
+:root {
+  --navy: #0d2344;
+  --navy-2: #17335e;
+  --gold: #ffd54f;
+  --orange: #ff8c5a;
+  --white: #ffffff;
+  --panel: rgba(8, 27, 56, 0.84);
+  --line: rgba(255, 255, 255, 0.14);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+}
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@700;800;900&display=swap"
-    rel="stylesheet"
-  >
+* {
+  box-sizing: border-box;
+}
 
-  <link rel="stylesheet" href="./style.css" />
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: "Nunito", system-ui, sans-serif;
+  background: #000;
+  color: var(--white);
+}
 
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
-</head>
-<body>
-  <div class="appShell">
-    <video id="video" playsinline muted autoplay></video>
-    <canvas id="canvas"></canvas>
+body {
+  min-height: 100vh;
+}
 
-    <div class="topRow">
-      <div class="overlay logoPanel">
-        <img id="bxcmLogo" src="./bxcm-logo.png" alt="Bronx Children's Museum logo">
-      </div>
+.appShell {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #000;
+}
 
-      <div class="overlay titlePanel">
-        <h1>BxCM Jr. Sluggers Academy</h1>
-        <p>Swing big. Make contact. Chase the high score.</p>
-      </div>
+#video {
+  position: absolute;
+  inset: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
 
-      <div class="overlay scorePanel">
-        <div class="scoreStat">
-          <span>Score</span>
-          <strong id="scoreEl">0</strong>
-        </div>
-        <div class="scoreStat">
-          <span>Pitches</span>
-          <strong id="pitchesEl">10</strong>
-        </div>
-      </div>
-    </div>
+#canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #000;
+}
 
-    <div class="leftStats">
-      <div class="overlay statBox">
-        <span>HITS</span>
-        <strong id="hitsEl">0</strong>
-      </div>
+.overlay {
+  position: absolute;
+  z-index: 20;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: var(--shadow);
+}
 
-      <div class="overlay statBox">
-        <span>MISSES</span>
-        <strong id="missesEl">0</strong>
-      </div>
+.topRow {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  right: 18px;
+  display: grid;
+  grid-template-columns: 190px 1fr 155px;
+  gap: 12px;
+  z-index: 20;
+}
 
-      <div class="overlay statBox">
-        <span>BEST EV</span>
-        <strong id="veloEl">0</strong>
-      </div>
-    </div>
+.logoPanel,
+.titlePanel,
+.scorePanel {
+  position: relative;
+  min-height: 82px;
+}
 
-    <div class="overlay miniMapWrap">
-      <canvas id="miniMapCanvas" width="220" height="130"></canvas>
-    </div>
+.logoPanel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+}
 
-    <div class="overlay instructionChip" id="instructionChip">
-      Press Start to begin.
-    </div>
+#bxcmLogo {
+  width: 100%;
+  max-width: 160px;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
 
-    <div class="overlay rightPanel" id="controlsPanel">
-      <h2>Controls</h2>
+.titlePanel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+  padding: 10px 16px;
+}
 
-      <button id="startBtn" class="ctaBtn primaryBtn" type="button">Start Game</button>
-      <button id="pauseBtn" class="ctaBtn secondaryBtn" type="button">Pause Game</button>
-      <button id="resetBtn" class="ctaBtn secondaryBtn" type="button">Reset Game</button>
-      <button id="muteBtn" class="ctaBtn soundBtn" type="button">Sound: On</button>
+.titlePanel h1 {
+  margin: 0;
+  font-family: "Baloo 2", sans-serif;
+  font-size: clamp(30px, 3vw, 52px);
+  line-height: 0.95;
+  color: var(--gold);
+}
 
-      <div class="controlGroup">
-        <label>Batting Side</label>
-        <div class="sideToggle">
-          <button id="rightHandBtn" class="toggleBtn active" type="button">Right</button>
-          <button id="leftHandBtn" class="toggleBtn" type="button">Left</button>
-        </div>
-      </div>
+.titlePanel p {
+  margin: 4px 0 0;
+  font-size: clamp(13px, 1.05vw, 18px);
+  font-weight: 800;
+  opacity: 0.96;
+}
 
-      <div class="controlGroup">
-        <div class="sliderHeader">
-          <label for="pitchSpeed">Pitch Speed</label>
-          <span id="pitchSpeedVal">10.5</span>
-        </div>
-        <input id="pitchSpeed" type="range" min="6" max="16" step="0.1" value="10.5">
-      </div>
+.scorePanel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 18px;
+}
 
-      <div class="controlGroup">
-        <div class="sliderHeader">
-          <label for="swingThreshold">Swing Threshold</label>
-          <span id="swingThresholdVal">420</span>
-        </div>
-        <input id="swingThreshold" type="range" min="200" max="900" step="10" value="420">
-      </div>
+.scoreStat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
 
-      <div class="controlGroup">
-        <div class="sliderHeader">
-          <label for="pitchDelay">Reset Between Pitches</label>
-          <span id="pitchDelayVal">3s</span>
-        </div>
-        <input id="pitchDelay" type="range" min="0.5" max="4" step="0.1" value="3">
-      </div>
+.scoreStat span {
+  font-size: 14px;
+  font-weight: 900;
+}
 
-      <div class="helpText">
-        Swing threshold = how fast your bat hand has to move before the game counts it as a real swing. Lower = easier.
-      </div>
-    </div>
-  </div>
+.scoreStat strong {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--gold);
+}
 
-  <script src="./game.js" defer></script>
-</body>
-</html>
+.leftStats {
+  position: absolute;
+  top: 118px;
+  left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 20;
+}
+
+.statBox {
+  position: relative;
+  width: 122px;
+  min-height: 92px;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+}
+
+.statBox span {
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.statBox strong {
+  font-size: 26px;
+  font-weight: 900;
+  margin-top: 2px;
+}
+
+.miniMapWrap {
+  left: 18px;
+  top: 50%;
+  transform: translateY(-10%);
+  width: 222px;
+  padding: 0;
+  overflow: hidden;
+}
+
+#miniMapCanvas {
+  display: block;
+  width: 220px;
+  height: 130px;
+  border-radius: 20px;
+}
+
+.instructionChip {
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  min-width: 420px;
+  max-width: min(760px, 80vw);
+  padding: 14px 22px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.rightPanel {
+  top: 118px;
+  right: 18px;
+  width: 280px;
+  padding: 16px 16px 18px;
+  transition: opacity 0.7s ease;
+}
+
+.rightPanel h2 {
+  margin: 0 0 12px;
+  font-family: "Baloo 2", sans-serif;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--gold);
+}
+
+.ctaBtn,
+.toggleBtn {
+  appearance: none;
+  border: 0;
+  outline: 0;
+  border-radius: 18px;
+  font-family: inherit;
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 0.12s ease, opacity 0.2s ease, background 0.2s ease;
+}
+
+.ctaBtn:hover,
+.toggleBtn:hover {
+  transform: translateY(-1px);
+}
+
+.ctaBtn {
+  display: block;
+  width: 100%;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  font-size: 18px;
+}
+
+.primaryBtn {
+  background: linear-gradient(180deg, #ff9f73, var(--orange));
+  color: #fff;
+}
+
+.secondaryBtn {
+  background: linear-gradient(180deg, #657d9f, #4c6281);
+  color: #fff;
+}
+
+.soundBtn {
+  background: linear-gradient(180deg, #59b3ff, #3c8ee1);
+  color: #fff;
+}
+
+.controlGroup {
+  margin-top: 14px;
+}
+
+.controlGroup label {
+  display: block;
+  font-size: 15px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.sideToggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.toggleBtn {
+  padding: 13px 10px;
+  font-size: 17px;
+  background: linear-gradient(180deg, #657d9f, #4c6281);
+  color: #fff;
+}
+
+.toggleBtn.active {
+  background: linear-gradient(180deg, #ffd95f, #ffc332);
+  color: #11284a;
+}
+
+.sliderHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.sliderHeader label {
+  margin: 0;
+}
+
+.sliderHeader span {
+  font-weight: 900;
+  color: #dfeaff;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: #4ea7ff;
+  cursor: pointer;
+}
+
+.helpText {
+  margin-top: 14px;
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 800;
+  opacity: 0.95;
+}
+
+@media (max-width: 1100px) {
+  .topRow {
+    grid-template-columns: 150px 1fr 130px;
+  }
+
+  .leftStats {
+    top: 108px;
+  }
+
+  .rightPanel {
+    width: 250px;
+    top: 108px;
+  }
+
+  .instructionChip {
+    max-width: 70vw;
+    min-width: 0;
+    font-size: 16px;
+  }
+}
