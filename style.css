@@ -1,6 +1,5 @@
 :root {
   --navy: #0d2344;
-  --navy-2: #17335e;
   --gold: #ffd54f;
   --orange: #ff8c5a;
   --white: #ffffff;
@@ -22,10 +21,6 @@ body {
   font-family: "Nunito", system-ui, sans-serif;
   background: #000;
   color: var(--white);
-}
-
-body {
-  min-height: 100vh;
 }
 
 .appShell {
@@ -321,25 +316,4 @@ input[type="range"] {
   line-height: 1.35;
   font-weight: 800;
   opacity: 0.95;
-}
-
-@media (max-width: 1100px) {
-  .topRow {
-    grid-template-columns: 150px 1fr 130px;
-  }
-
-  .leftStats {
-    top: 108px;
-  }
-
-  .rightPanel {
-    width: 250px;
-    top: 108px;
-  }
-
-  .instructionChip {
-    max-width: 70vw;
-    min-width: 0;
-    font-size: 16px;
-  }
 }
