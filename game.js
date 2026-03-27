@@ -1,3 +1,6 @@
+const appShell = document.getElementById("appShell");
+const splashStartBtn = document.getElementById("splashStartBtn");
+
 const startBtn = document.getElementById("startBtn");
 const pauseBtn = document.getElementById("pauseBtn");
 const resetBtn = document.getElementById("resetBtn");
@@ -53,10 +56,8 @@ function updateUI() {
   pauseBtn.textContent = paused ? "Resume Game" : "Pause Game";
 }
 
-function drawSplash() {
+function drawSplashBackground() {
   resizeCanvas();
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
   grad.addColorStop(0, "#0d2344");
@@ -67,31 +68,12 @@ function drawSplash() {
   ctx.fillStyle = "rgba(255,255,255,0.08)";
   for (let i = 0; i < 8; i++) {
     ctx.beginPath();
-    ctx.arc(
-      canvas.width * (0.1 + i * 0.12),
-      canvas.height * 0.18,
-      18,
-      0,
-      Math.PI * 2
-    );
+    ctx.arc(canvas.width * (0.1 + i * 0.12), canvas.height * 0.18, 18, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#ffd54f";
-  ctx.font = '900 64px "Baloo 2", sans-serif';
-  ctx.fillText("BxCM Jr. Sluggers Academy", canvas.width / 2, canvas.height * 0.30);
-
-  ctx.fillStyle = "#ffffff";
-  ctx.font = '900 26px "Nunito", sans-serif';
-  ctx.fillText("Choose your batting side and press Start Game.", canvas.width / 2, canvas.height * 0.40);
-
-  ctx.fillStyle = "rgba(255,255,255,0.12)";
+  ctx.fillStyle = "rgba(255,255,255,0.08)";
   ctx.fillRect(canvas.width * 0.18, canvas.height * 0.58, canvas.width * 0.64, canvas.height * 0.12);
-
-  ctx.fillStyle = "#ffd54f";
-  ctx.font = '900 72px "Baloo 2", sans-serif';
-  ctx.fillText("READY?", canvas.width / 2, canvas.height * 0.66);
 }
 
 async function startCamera() {
@@ -110,7 +92,7 @@ async function startCamera() {
   await video.play();
 }
 
-function drawCameraPlaceholder() {
+function drawGamePlaceholder() {
   resizeCanvas();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -120,7 +102,7 @@ function drawCameraPlaceholder() {
   ctx.textAlign = "center";
   ctx.fillStyle = "#ffd54f";
   ctx.font = '900 72px "Baloo 2", sans-serif';
-  ctx.fillText(paused ? "PAUSED" : "CAMERA ON", canvas.width / 2, canvas.height * 0.35);
+  ctx.fillText(paused ? "PAUSED" : "GAME READY", canvas.width / 2, canvas.height * 0.35);
 
   ctx.fillStyle = "#ffffff";
   ctx.font = '900 26px "Nunito", sans-serif';
@@ -132,28 +114,34 @@ function drawCameraPlaceholder() {
 }
 
 function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
   if (!started) {
-    drawSplash();
+    drawSplashBackground();
   } else {
-    drawCameraPlaceholder();
+    drawGamePlaceholder();
   }
+
   animationId = requestAnimationFrame(render);
 }
 
-startBtn.onclick = async () => {
+async function beginGame() {
   try {
     instructionChip.textContent = "Starting camera...";
     await startCamera();
     started = true;
     paused = false;
+    appShell.classList.remove("preGame");
     instructionChip.textContent = "Camera started. Base layout is working again.";
-    controlsPanel.style.opacity = "1";
   } catch (err) {
     console.error(err);
     instructionChip.textContent = `Camera failed: ${err.message}`;
   }
   updateUI();
-};
+}
+
+splashStartBtn.onclick = beginGame;
+startBtn.onclick = beginGame;
 
 pauseBtn.onclick = () => {
   if (!started) return;
@@ -165,6 +153,7 @@ pauseBtn.onclick = () => {
 resetBtn.onclick = () => {
   started = false;
   paused = false;
+  appShell.classList.add("preGame");
   instructionChip.textContent = "Press Start to begin.";
   updateUI();
 };
@@ -193,4 +182,5 @@ pitchDelaySlider.oninput = updateUI;
 resizeCanvas();
 updateUI();
 instructionChip.textContent = "Press Start to begin.";
+appShell.classList.add("preGame");
 render();
