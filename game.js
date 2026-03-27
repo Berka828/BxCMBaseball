@@ -151,6 +151,7 @@ let countdownTimer = null;
 let countdownActive = false;
 let countdownValue = 5;
 
+let summaryTimer = null;
 let roundSummary = null;
 let showRoundComplete = false;
 let roundCompleteTimer = 0;
@@ -570,7 +571,7 @@ function clearCountdownTimer() {
 }
 
 function clearSummaryTimer() {
-  if (summaryTimer) {
+  if (typeof summaryTimer !== "undefined" && summaryTimer) {
     clearTimeout(summaryTimer);
     summaryTimer = null;
   }
@@ -749,7 +750,7 @@ function endRoundToSummary() {
   roundCompleteTimer = Math.round(ROUND_COMPLETE_MS / (1000 / 60));
   gameState = "round_complete";
 
-  setTimeout(() => {
+  summaryTimer = setTimeout(() => {
     showRoundComplete = false;
     roundSummary = buildRoundSummary();
     gameState = "summary";
@@ -758,7 +759,7 @@ function endRoundToSummary() {
   }, ROUND_COMPLETE_MS + 2200);
 }
 
-// ---------- CHARACTER-LIKE SILHOUETTE ----------
+// ---------- CHARACTER ----------
 function scalePoint(p, center, scale) {
   if (!p) return null;
   return {
@@ -1490,6 +1491,626 @@ function drawMiniMap() {
   miniCtx.fillText("Right-to-left", 12, 18);
 }
 
+// ---------- ICONS / BADGE ----------
+function drawBaseballIcon(x, y, r, active = true) {
+  ctx.save();
+  ctx.globalAlpha = active ? 1 : 0.28;
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "#d64545";
+  ctx.lineWidth = 1.5;
+
+  ctx.beginPath();
+  ctx.arc(x - 3, y, r - 4, -1.1, 1.1);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(x + 3, y, r - 4, 2.0, 4.2);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawPitchIconsRow() {
+  const total = roundPitches;
+  const gap = 24;
+  const r = 8;
+  const rowWidth = (total - 1) * gap;
+  const startX = canvas.width / 2 - rowWidth / 2;
+  const y = canvas.height - 148;
+
+  for (let i = 0; i < total; i++) {
+    const active = i < pitchesLeft;
+    drawBaseballIcon(startX + i * gap, y, r, active);
+  }
+}
+
+function drawBadge(cx, cy, label) {
+  ctx.save();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, 64, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffd43b";
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, 52, 0, Math.PI * 2);
+  ctx.fillStyle = "#25a9ff";
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, 40, 0, Math.PI * 2);
+  ctx.fillStyle = "#7d4dff";
+  ctx.fill();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 16px "Baloo 2", sans-serif';
+  ctx.textAlign = "center";
+  ctx.fillText("BxCM", cx, cy - 8);
+  ctx.font = '900 12px "Nunito", sans-serif';
+  ctx.fillText(label, cx, cy + 14);
+
+  ctx.restore();
+}
+
+// ---------- FX ----------
+function getShakeOffset() {
+  if (screenShakeTimer <= 0) return { x: 0, y: 0 };
+  screenShakeTimer--;
+  return {
+    x: (Math.random() - 0.5) * screenShakeAmount,
+    y: (Math.random() - 0.5) * screenShakeAmount
+  };
+}
+
+function spawnConfetti(x, y, count) {
+  for (let i = 0; i < count; i++) {
+    confetti.push({
+      x,
+      y,
+      vx: (Math.random() - 0.5) * 9,
+      vy: -Math.random() * 8 - 1.5,
+      size: 4 + Math.random() * 7,
+      life: 22 + Math.random() * 24,
+      color: ["#ff5252", "#ffd54f", "#66bb6a", "#42a5f5", "#ab47bc", "#ff7043"][i % 6]
+    });
+  }
+}
+
+function spawnStars(x, y, label) {
+  const count = label === "HOME RUN!" ? 8 : 4;
+  for (let i = 0; i < count; i++) {
+    floatingStars.push({
+      x: x + (Math.random() - 0.5) * 20,
+      y: y + (Math.random() - 0.5) * 20,
+      vy: -1 - Math.random() * 1.2,
+      life: 24 + Math.random() * 10,
+      size: 10 + Math.random() * 10
+    });
+  }
+}
+
+function triggerHomeRunCelebration(x, y) {
+  screenShakeTimer = 28;
+  screenShakeAmount = 14;
+  flashTimer = 14;
+
+  for (let i = 0; i < 4; i++) {
+    homerBursts.push({
+      x: x + (Math.random() - 0.5) * 120,
+      y: y + (Math.random() - 0.5) * 80,
+      radius: 10,
+      life: 26 + i * 4,
+      color: ["#ffd54f", "#42a5f5", "#ff7043", "#66bb6a"][i % 4]
+    });
+  }
+
+  spawnConfetti(x, y, 100);
+  spawnStars(x, y, "HOME RUN!");
+  spawnStars(x + 80, y - 40, "HOME RUN!");
+  spawnStars(x - 80, y - 20, "HOME RUN!");
+}
+
+function updateAndDrawConfetti() {
+  for (let i = confetti.length - 1; i >= 0; i--) {
+    const p = confetti[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.20;
+    p.life--;
+
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x, p.y, p.size, p.size * 0.7);
+
+    if (p.life <= 0) confetti.splice(i, 1);
+  }
+}
+
+function drawStar(x, y, r, color) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+
+  for (let i = 0; i < 5; i++) {
+    const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
+    const sx = Math.cos(a) * r;
+    const sy = Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(sx, sy);
+    else ctx.lineTo(sx, sy);
+    const a2 = a + Math.PI / 5;
+    ctx.lineTo(Math.cos(a2) * r * 0.45, Math.sin(a2) * r * 0.45);
+  }
+
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function updateAndDrawStars() {
+  for (let i = floatingStars.length - 1; i >= 0; i--) {
+    const s = floatingStars[i];
+    s.y += s.vy;
+    s.life--;
+    drawStar(s.x, s.y, s.size * 0.5, "rgba(255, 213, 79, 0.9)");
+    if (s.life <= 0) floatingStars.splice(i, 1);
+  }
+}
+
+function updateAndDrawHomerBursts() {
+  for (let i = homerBursts.length - 1; i >= 0; i--) {
+    const b = homerBursts[i];
+    b.radius += 10;
+    b.life--;
+
+    ctx.save();
+    ctx.strokeStyle = b.color;
+    ctx.lineWidth = 6;
+    ctx.globalAlpha = Math.max(b.life / 30, 0);
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    if (b.life <= 0) homerBursts.splice(i, 1);
+  }
+}
+
+function updateAndDrawHomerTrailParticles() {
+  for (let i = homerTrailParticles.length - 1; i >= 0; i--) {
+    const p = homerTrailParticles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(p.life / 24, 0);
+    ctx.fillStyle = p.color;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    if (p.life <= 0) homerTrailParticles.splice(i, 1);
+  }
+}
+
+function drawHitOverlay() {
+  if (hitTextTimer > 0) {
+    const alpha = Math.min(1, hitTextTimer / 24);
+    const scale = 1 + Math.sin((90 - hitTextTimer) * 0.10) * 0.03;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(canvas.width / 2, canvas.height * 0.22);
+    ctx.scale(scale, scale);
+
+    ctx.textAlign = "center";
+    ctx.lineWidth = 9;
+    ctx.strokeStyle = "#14304b";
+    ctx.fillStyle = hitText.includes("HOME RUN!") ? "#ffd54f" : "#ffffff";
+    ctx.font = '900 56px "Baloo 2", sans-serif';
+    ctx.strokeText(hitText, 0, 0);
+    ctx.fillText(hitText, 0, 0);
+    ctx.restore();
+
+    hitTextTimer--;
+  }
+
+  if (timingTextTimer > 0) {
+    const alpha = Math.min(1, timingTextTimer / 24);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.textAlign = "center";
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = "#14304b";
+
+    let fill = "#ffffff";
+    if (timingText === "PERFECT!") fill = "#2ed573";
+    if (timingText === "TOO EARLY" || timingText === "TOO LATE") fill = "#ff9f1a";
+
+    ctx.fillStyle = fill;
+    ctx.font = '900 38px "Baloo 2", sans-serif';
+    ctx.strokeText(timingText, canvas.width / 2, canvas.height * 0.30);
+    ctx.fillText(timingText, canvas.width / 2, canvas.height * 0.30);
+    ctx.restore();
+
+    timingTextTimer--;
+  }
+
+  if (flashTimer > 0) {
+    ctx.fillStyle = `rgba(255,255,255,${flashTimer * 0.020})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    flashTimer--;
+  }
+}
+
+function drawDistanceOverlay() {
+  if (gameState === "playing" && ball && ball.hit && currentDistanceFt > 0) {
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "#14304b";
+    ctx.fillStyle = "#ffd43b";
+    ctx.font = '900 42px "Baloo 2", sans-serif';
+    ctx.strokeText(`${Math.round(currentDistanceFt)} FT`, canvas.width / 2, canvas.height * 0.14);
+    ctx.fillText(`${Math.round(currentDistanceFt)} FT`, canvas.width / 2, canvas.height * 0.14);
+    ctx.restore();
+  }
+
+  if (distanceTextTimer > 0) {
+    const alpha = Math.min(1, distanceTextTimer / 24);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.textAlign = "center";
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = "#14304b";
+    ctx.fillStyle = "#25a9ff";
+    ctx.font = '900 34px "Baloo 2", sans-serif';
+    ctx.strokeText(distanceText, canvas.width / 2, canvas.height * 0.36);
+    ctx.fillText(distanceText, canvas.width / 2, canvas.height * 0.36);
+    ctx.restore();
+
+    distanceTextTimer--;
+  }
+}
+
+function drawMissOverlay() {
+  if (missTextTimer <= 0) return;
+
+  const alpha = Math.min(1, missTextTimer / 24);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = "center";
+  ctx.lineWidth = 7;
+  ctx.strokeStyle = "#14304b";
+  ctx.fillStyle = "#ff9f1a";
+  ctx.font = '900 38px "Baloo 2", sans-serif';
+  ctx.strokeText(missText, canvas.width / 2, canvas.height * 0.32);
+  ctx.fillText(missText, canvas.width / 2, canvas.height * 0.32);
+  ctx.restore();
+
+  missTextTimer--;
+}
+
+function drawRoundCompleteOverlay() {
+  if (!showRoundComplete) return;
+
+  const alpha = Math.min(1, roundCompleteTimer / 24);
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = "center";
+  ctx.shadowBlur = 30;
+  ctx.shadowColor = "#ffd43b";
+  ctx.fillStyle = "#ffd43b";
+  ctx.strokeStyle = "#14304b";
+  ctx.lineWidth = 10;
+  ctx.font = '900 72px "Baloo 2", sans-serif';
+  ctx.strokeText("ROUND COMPLETE", canvas.width / 2, canvas.height * 0.46);
+  ctx.fillText("ROUND COMPLETE", canvas.width / 2, canvas.height * 0.46);
+  ctx.restore();
+
+  if (roundCompleteTimer > 0) roundCompleteTimer--;
+}
+
+function drawPauseOverlay() {
+  ctx.fillStyle = "rgba(0,0,0,0.26)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffd54f";
+  ctx.font = '900 64px "Baloo 2", sans-serif';
+  ctx.fillText("PAUSED", canvas.width / 2, canvas.height * 0.35);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 28px "Nunito", sans-serif';
+  ctx.fillText("Press Space or Pause again to keep playing.", canvas.width / 2, canvas.height * 0.43);
+}
+
+function drawStartOverlay() {
+  ctx.fillStyle = "rgba(0,0,0,0.20)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffd54f";
+  ctx.font = '900 60px "Baloo 2", sans-serif';
+  ctx.fillText("PRESS START", canvas.width / 2, canvas.height * 0.33);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 28px "Nunito", sans-serif';
+  ctx.fillText("Press the button to begin.", canvas.width / 2, canvas.height * 0.41);
+}
+
+function drawSummaryOverlay() {
+  if (!roundSummary) return;
+
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  drawBadge(canvas.width / 2, canvas.height * 0.24, roundSummary.badge);
+
+  ctx.save();
+  ctx.textAlign = "center";
+
+  ctx.fillStyle = "#ffd43b";
+  ctx.font = '900 54px "Baloo 2", sans-serif';
+  ctx.fillText(roundSummary.title, canvas.width / 2, canvas.height * 0.40);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 28px "Nunito", sans-serif';
+  ctx.fillText(roundSummary.message, canvas.width / 2, canvas.height * 0.50);
+
+  ctx.font = '800 24px "Nunito", sans-serif';
+  ctx.fillStyle = "#25a9ff";
+  ctx.fillText(`Best Distance: ${Math.round(bestDistanceFt)} FT`, canvas.width / 2, canvas.height * 0.58);
+
+  ctx.fillStyle = "#2ed573";
+  ctx.fillText(`Hits: ${hits}   •   Home Runs: ${homeRuns}`, canvas.width / 2, canvas.height * 0.65);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '800 22px "Nunito", sans-serif';
+  ctx.fillText(roundSummary.tip, canvas.width / 2, canvas.height * 0.75);
+
+  ctx.fillStyle = "rgba(255,255,255,0.86)";
+  ctx.font = '800 18px "Nunito", sans-serif';
+  ctx.fillText("Administrator: press Reset to return to splash.", canvas.width / 2, canvas.height * 0.85);
+
+  ctx.restore();
+}
+
+function drawCountdownOverlay() {
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffd54f";
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = "#14304b";
+
+  if (countdownValue > 0) {
+    ctx.font = '900 120px "Baloo 2", sans-serif';
+    ctx.strokeText(String(countdownValue), canvas.width / 2, canvas.height * 0.45);
+    ctx.fillText(String(countdownValue), canvas.width / 2, canvas.height * 0.45);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = '900 28px "Nunito", sans-serif';
+    ctx.fillText("Get set...", canvas.width / 2, canvas.height * 0.55);
+  } else {
+    ctx.font = '900 90px "Baloo 2", sans-serif';
+    ctx.strokeText("SWING!", canvas.width / 2, canvas.height * 0.45);
+    ctx.fillText("SWING!", canvas.width / 2, canvas.height * 0.45);
+  }
+}
+
+function drawCoachOverlay() {
+  if (coachTextTimer <= 0) return;
+
+  const alpha = Math.min(1, coachTextTimer / 20);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = "rgba(10,18,38,0.78)";
+  ctx.beginPath();
+  ctx.roundRect(canvas.width * 0.60, canvas.height * 0.12, 300, 56, 18);
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 18px "Nunito", sans-serif';
+  ctx.textAlign = "left";
+  ctx.fillText(coachText, canvas.width * 0.60 + 18, canvas.height * 0.12 + 34);
+  ctx.restore();
+
+  coachTextTimer--;
+}
+
+function drawCrowdOverlay() {
+  if (crowdTextTimer <= 0) return;
+
+  const alpha = Math.min(1, crowdTextTimer / 16);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = "center";
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = "#14304b";
+  ctx.fillStyle = crowdMood === "boo" ? "#ff9f1a" : "#ffd43b";
+  ctx.font = '900 28px "Baloo 2", sans-serif';
+  ctx.strokeText(crowdText, canvas.width * 0.18, canvas.height * 0.20);
+  ctx.fillText(crowdText, canvas.width * 0.18, canvas.height * 0.20);
+  ctx.restore();
+
+  crowdTextTimer--;
+}
+
+// ---------- COUNTDOWN ----------
+function startCountdown() {
+  clearCountdownTimer();
+  countdownActive = true;
+  countdownValue = 5;
+  gameState = "countdown";
+
+  if (instructionChip) {
+    instructionChip.textContent = "Get set...";
+  }
+
+  hideControlsPanel();
+  fadeOutIntroMusic(1800);
+
+  const tick = () => {
+    if (!countdownActive) return;
+
+    if (countdownValue > 0) {
+      playCountdownBeep(countdownValue);
+      if (instructionChip) {
+        instructionChip.textContent = `Starting in ${countdownValue}...`;
+      }
+      countdownValue--;
+      countdownTimer = setTimeout(tick, 1000);
+    } else {
+      playGoSound();
+      if (instructionChip) {
+        instructionChip.textContent = "Swing!";
+      }
+      countdownActive = false;
+      gameState = "playing";
+      createPitch();
+    }
+  };
+
+  tick();
+}
+
+// ---------- CAMERA / MODEL ----------
+async function setupCamera() {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: "user",
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    },
+    audio: false
+  });
+
+  video.srcObject = stream;
+
+  await new Promise(resolve => {
+    video.onloadedmetadata = () => resolve();
+  });
+
+  await video.play();
+  resizeCanvas();
+}
+
+async function loadModel() {
+  await tf.ready();
+  detector = await poseDetection.createDetector(
+    poseDetection.SupportedModels.MoveNet,
+    { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
+  );
+}
+
+// ---------- SIDE SELECT ----------
+function updateSideButtons() {
+  if (battingSide === "right") {
+    if (rightHandBtn) rightHandBtn.classList.add("active");
+    if (leftHandBtn) leftHandBtn.classList.remove("active");
+  } else {
+    if (leftHandBtn) leftHandBtn.classList.add("active");
+    if (rightHandBtn) rightHandBtn.classList.remove("active");
+  }
+}
+
+if (rightHandBtn) {
+  rightHandBtn.onclick = () => {
+    battingSide = "right";
+    prevBatPoint = null;
+    updateSideButtons();
+  };
+}
+
+if (leftHandBtn) {
+  leftHandBtn.onclick = () => {
+    battingSide = "left";
+    prevBatPoint = null;
+    updateSideButtons();
+  };
+}
+
+// ---------- RESET ROUND ----------
+function resetRound() {
+  clearPitchTimer();
+  clearCountdownTimer();
+  clearSummaryTimer();
+
+  score = 0;
+  hits = 0;
+  misses = 0;
+  homeRuns = 0;
+  bestDistanceFt = 0;
+  currentDistanceFt = 0;
+  pitchesLeft = roundPitches;
+
+  prevBatPoint = null;
+  batVelocity = { x: 0, y: 0, speed: 0 };
+  lastBatTip = null;
+  ball = null;
+
+  hitText = "";
+  hitTextTimer = 0;
+  timingText = "";
+  timingTextTimer = 0;
+  distanceText = "";
+  distanceTextTimer = 0;
+  missText = "";
+  missTextTimer = 0;
+
+  coachText = "";
+  coachTextTimer = 0;
+  crowdText = "";
+  crowdTextTimer = 0;
+  crowdMood = "quiet";
+
+  accuracyMarkerTimer = 0;
+  lastTimingOffset = 0.5;
+  lastTimingRating = "";
+
+  flashTimer = 0;
+
+  confetti = [];
+  floatingStars = [];
+  homerBursts = [];
+  homerTrailParticles = [];
+  batTrail = [];
+
+  screenShakeTimer = 0;
+  screenShakeAmount = 0;
+
+  countdownActive = false;
+  countdownValue = 5;
+  roundSummary = null;
+  showRoundComplete = false;
+  roundCompleteTimer = 0;
+  strikeZone = null;
+
+  CONTACT_DISTANCE = DIFFICULTIES[difficulty].contactDistance;
+
+  updateHud();
+
+  if (instructionChip) {
+    instructionChip.textContent = "Strong swings can send the ball farther. Timing matters too.";
+  }
+
+  showControlsPanel();
+}
+
 // ---------- MAIN LOOP ----------
 async function loop() {
   const shake = getShakeOffset();
@@ -1583,49 +2204,6 @@ async function loop() {
   animationId = requestAnimationFrame(loop);
 }
 
-// ---------- COACH / CROWD OVERLAYS ----------
-function drawCoachOverlay() {
-  if (coachTextTimer <= 0) return;
-
-  const alpha = Math.min(1, coachTextTimer / 20);
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.fillStyle = "rgba(10,18,38,0.78)";
-  ctx.beginPath();
-  ctx.roundRect(canvas.width * 0.60, canvas.height * 0.12, 300, 56, 18);
-  ctx.fill();
-
-  ctx.strokeStyle = "rgba(255,255,255,0.18)";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  ctx.fillStyle = "#ffffff";
-  ctx.font = '900 18px "Nunito", sans-serif';
-  ctx.textAlign = "left";
-  ctx.fillText(coachText, canvas.width * 0.60 + 18, canvas.height * 0.12 + 34);
-  ctx.restore();
-
-  coachTextTimer--;
-}
-
-function drawCrowdOverlay() {
-  if (crowdTextTimer <= 0) return;
-
-  const alpha = Math.min(1, crowdTextTimer / 16);
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.textAlign = "center";
-  ctx.lineWidth = 6;
-  ctx.strokeStyle = "#14304b";
-  ctx.fillStyle = crowdMood === "boo" ? "#ff9f1a" : "#ffd43b";
-  ctx.font = '900 28px "Baloo 2", sans-serif';
-  ctx.strokeText(crowdText, canvas.width * 0.18, canvas.height * 0.20);
-  ctx.fillText(crowdText, canvas.width * 0.18, canvas.height * 0.20);
-  ctx.restore();
-
-  crowdTextTimer--;
-}
-
 // ---------- BUTTONS ----------
 async function startOrResumeGame() {
   try {
@@ -1663,7 +2241,7 @@ async function startOrResumeGame() {
     }
   } catch (err) {
     console.error("START ERROR:", err);
-    alert("Start failed. See console.");
+    alert("Start failed: " + err.message);
   }
 }
 
@@ -1716,102 +2294,6 @@ function resetGame() {
   }
 }
 
-// ---------- CAMERA / MODEL ----------
-async function setupCamera() {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: {
-      facingMode: "user",
-      width: { ideal: 1280 },
-      height: { ideal: 720 }
-    },
-    audio: false
-  });
-
-  video.srcObject = stream;
-
-  await new Promise(resolve => {
-    video.onloadedmetadata = () => resolve();
-  });
-
-  await video.play();
-  resizeCanvas();
-}
-
-async function loadModel() {
-  await tf.ready();
-  detector = await poseDetection.createDetector(
-    poseDetection.SupportedModels.MoveNet,
-    { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
-  );
-}
-
-// ---------- RESET ROUND ----------
-function resetRound() {
-  clearPitchTimer();
-  clearCountdownTimer();
-  clearSummaryTimer();
-
-  score = 0;
-  hits = 0;
-  misses = 0;
-  homeRuns = 0;
-  bestDistanceFt = 0;
-  currentDistanceFt = 0;
-  pitchesLeft = roundPitches;
-
-  prevBatPoint = null;
-  batVelocity = { x: 0, y: 0, speed: 0 };
-  lastBatTip = null;
-  ball = null;
-
-  hitText = "";
-  hitTextTimer = 0;
-  timingText = "";
-  timingTextTimer = 0;
-  distanceText = "";
-  distanceTextTimer = 0;
-  missText = "";
-  missTextTimer = 0;
-
-  coachText = "";
-  coachTextTimer = 0;
-  crowdText = "";
-  crowdTextTimer = 0;
-  crowdMood = "quiet";
-
-  accuracyMarkerTimer = 0;
-  lastTimingOffset = 0.5;
-  lastTimingRating = "";
-
-  flashTimer = 0;
-
-  confetti = [];
-  floatingStars = [];
-  homerBursts = [];
-  homerTrailParticles = [];
-  batTrail = [];
-
-  screenShakeTimer = 0;
-  screenShakeAmount = 0;
-
-  countdownActive = false;
-  countdownValue = 5;
-  roundSummary = null;
-  showRoundComplete = false;
-  roundCompleteTimer = 0;
-  strikeZone = null;
-
-  CONTACT_DISTANCE = DIFFICULTIES[difficulty].contactDistance;
-
-  updateHud();
-
-  if (instructionChip) {
-    instructionChip.textContent = "Strong swings can send the ball farther. Timing matters too.";
-  }
-
-  showControlsPanel();
-}
-
 // ---------- INIT ----------
 if (startBtn) {
   startBtn.onclick = startOrResumeGame;
@@ -1845,22 +2327,6 @@ if (muteBtn) {
   };
 }
 
-if (rightHandBtn) {
-  rightHandBtn.onclick = () => {
-    battingSide = "right";
-    prevBatPoint = null;
-    updateSideButtons();
-  };
-}
-
-if (leftHandBtn) {
-  leftHandBtn.onclick = () => {
-    battingSide = "left";
-    prevBatPoint = null;
-    updateSideButtons();
-  };
-}
-
 window.addEventListener("keydown", (e) => {
   if (e.code === "Space") {
     e.preventDefault();
@@ -1872,16 +2338,6 @@ window.addEventListener("keydown", (e) => {
     }
   }
 });
-
-function updateSideButtons() {
-  if (battingSide === "right") {
-    if (rightHandBtn) rightHandBtn.classList.add("active");
-    if (leftHandBtn) leftHandBtn.classList.remove("active");
-  } else {
-    if (leftHandBtn) leftHandBtn.classList.add("active");
-    if (rightHandBtn) rightHandBtn.classList.remove("active");
-  }
-}
 
 updateSideButtons();
 updateHud();
