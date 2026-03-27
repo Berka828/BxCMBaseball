@@ -1,9 +1,11 @@
 :root {
   --navy: #0d2344;
+  --navy-2: #17335e;
   --gold: #ffd54f;
   --orange: #ff8c5a;
   --white: #ffffff;
   --panel: rgba(8, 27, 56, 0.84);
+  --panel-soft: rgba(8, 27, 56, 0.68);
   --line: rgba(255, 255, 255, 0.14);
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
 }
@@ -70,16 +72,18 @@ body {
   pointer-events: none;
 }
 
+/* Splash */
 .splashScreen {
   position: absolute;
   inset: 0;
-  z-index: 40;
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 32px;
   background:
-    linear-gradient(rgba(7, 18, 38, 0.48), rgba(7, 18, 38, 0.68)),
-    radial-gradient(circle at top, rgba(255, 213, 79, 0.12), transparent 30%);
+    radial-gradient(circle at top, rgba(255, 213, 79, 0.14), transparent 30%),
+    linear-gradient(180deg, rgba(8,27,56,0.72), rgba(8,27,56,0.86));
   transition: opacity 0.4s ease, visibility 0.4s ease;
 }
 
@@ -89,50 +93,59 @@ body {
   pointer-events: none;
 }
 
-.splashCard {
-  width: min(760px, 88vw);
-  padding: 32px 28px;
+.splashInner {
+  width: min(860px, 92vw);
+  padding: 34px 30px;
+  border-radius: 30px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(8, 27, 56, 0.78);
+  box-shadow: 0 22px 60px rgba(0,0,0,0.36);
   text-align: center;
-  border-radius: 28px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(8, 27, 56, 0.82);
-  box-shadow: 0 20px 60px rgba(0,0,0,0.36);
   backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 #splashLogo {
-  width: min(360px, 60vw);
-  height: auto;
   display: block;
-  margin: 0 auto 14px;
+  width: min(380px, 60vw);
+  height: auto;
+  margin: 0 auto 18px;
 }
 
-.splashCard h1 {
+.splashTitleBlock h1 {
   margin: 0;
   font-family: "Baloo 2", sans-serif;
-  font-size: clamp(42px, 5vw, 72px);
+  font-size: clamp(42px, 5vw, 76px);
   line-height: 0.95;
   color: var(--gold);
 }
 
-.splashCard p {
-  margin: 10px 0 18px;
+.splashTitleBlock p {
+  margin: 10px 0 0;
   font-size: clamp(18px, 2vw, 24px);
   font-weight: 800;
+  opacity: 0.98;
 }
 
-.splashButtons {
+.splashAction {
   display: flex;
   justify-content: center;
+  margin-top: 24px;
 }
 
-.splashHint {
-  margin-top: 12px;
-  font-size: 16px;
+.splashAction .ctaBtn {
+  width: min(320px, 70vw);
+  margin: 0;
+}
+
+.splashSubtext {
+  margin-top: 14px;
+  font-size: 15px;
   font-weight: 800;
   opacity: 0.9;
 }
 
+/* Top */
 .topRow {
   position: absolute;
   top: 18px;
@@ -215,6 +228,7 @@ body {
   color: var(--gold);
 }
 
+/* Left stats */
 .leftStats {
   position: absolute;
   top: 118px;
@@ -247,6 +261,7 @@ body {
   margin-top: 2px;
 }
 
+/* Minimap */
 .miniMapWrap {
   left: 18px;
   top: 50%;
@@ -263,6 +278,7 @@ body {
   border-radius: 20px;
 }
 
+/* Instruction */
 .instructionChip {
   left: 50%;
   bottom: 18px;
@@ -275,6 +291,7 @@ body {
   font-weight: 900;
 }
 
+/* Right controls */
 .rightPanel {
   top: 118px;
   right: 18px;
@@ -389,4 +406,25 @@ input[type="range"] {
   line-height: 1.35;
   font-weight: 800;
   opacity: 0.95;
+}
+
+@media (max-width: 1100px) {
+  .topRow {
+    grid-template-columns: 150px 1fr 130px;
+  }
+
+  .leftStats {
+    top: 108px;
+  }
+
+  .rightPanel {
+    width: 250px;
+    top: 108px;
+  }
+
+  .instructionChip {
+    max-width: 70vw;
+    min-width: 0;
+    font-size: 16px;
+  }
 }
