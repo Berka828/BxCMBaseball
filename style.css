@@ -24,7 +24,6 @@ html,body{
   background:#000;
   color:var(--text);
 }
-
 body{background:#000}
 
 .stageWrap{
@@ -399,6 +398,24 @@ body{background:#000}
   animation:splashDrift 12s ease-in-out infinite alternate;
 }
 
+.splashGhost{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  pointer-events:none;
+  opacity:.12;
+  filter:blur(1px);
+  transform:scale(1.28);
+}
+
+.splashGhost img{
+  width:min(96vw,1300px);
+  height:auto;
+  display:block;
+}
+
 .splashGlow{
   position:absolute;
   width:74vmin;
@@ -642,5 +659,9 @@ body{background:#000}
 
   .lowerMiniMap{
     bottom:192px;
+  }
+
+  .splashGhost img{
+    width:min(120vw,1400px);
   }
 }
