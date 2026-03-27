@@ -37,7 +37,6 @@ const pitchSpeedVal = document.getElementById("pitchSpeedVal");
 const swingThresholdVal = document.getElementById("swingThresholdVal");
 const pitchDelayVal = document.getElementById("pitchDelayVal");
 
-const rightPanel = document.querySelector(".rightPanel");
 const controlDock = document.querySelector(".controlDock");
 
 // ---------- DIFFICULTY ----------
@@ -159,15 +158,18 @@ let roundCompleteTimer = 0;
 let screenShakeTimer = 0;
 let screenShakeAmount = 0;
 
-let strikeZone = null;
-let accuracyMarkerTimer = 0;
-let lastTimingOffset = 0;
+let lastTimingOffset = 0.5;
 let lastTimingRating = "";
+let accuracyMarkerTimer = 0;
+
 let coachText = "";
 let coachTextTimer = 0;
 let crowdText = "";
 let crowdTextTimer = 0;
 let crowdMood = "quiet";
+
+let swingPowerDisplay = 0;
+let swingPowerPeak = 0;
 
 const BALL_RADIUS = 14;
 const GRAVITY = 0.44;
@@ -331,15 +333,22 @@ function drawBackground() {
 }
 
 // ---------- AUDIO ----------
-var audioCtx = null;
-var soundEnabled = true;
+let audioCtx = null;
+let soundEnabled = true;
 
-var introMusic = null;
-var introMusicStarted = false;
-var introFadeTimer = null;
+let introMusic = null;
+let introMusicStarted = false;
+let introFadeTimer = null;
 
-var homeRunMusic = null;
-var homeRunMusicTimer = null;
+let homeRunMusic = null;
+let homeRunMusicTimer = null;
+
+// ambient crowd system
+let ambientMasterGain = null;
+let ambientRumbleOsc = null;
+let ambientRumbleGain = null;
+let ambientCrowdInterval = null;
+let ambientRunning = false;
 
 function initAudio() {
   if (!audioCtx) {
@@ -350,6 +359,12 @@ function initAudio() {
 
   if (audioCtx.state === "suspended") {
     audioCtx.resume().catch(() => {});
+  }
+
+  if (!ambientMasterGain && audioCtx) {
+    ambientMasterGain = audioCtx.createGain();
+    ambientMasterGain.gain.value = 0.0;
+    ambientMasterGain.connect(audioCtx.destination);
   }
 }
 
@@ -407,6 +422,7 @@ function playHomeRunSound() {
   tone(659.25, 0.12, "triangle", 0.14, 0.16);
   tone(783.99, 0.18, "triangle", 0.14, 0.26);
   tone(1046.5, 0.20, "triangle", 0.12, 0.42);
+  tone(1318.5, 0.24, "triangle", 0.10, 0.60);
 }
 
 function playBooSound() {
@@ -428,6 +444,12 @@ function playCountdownBeep(num) {
 function playGoSound() {
   tone(880, 0.08, "triangle", 0.12, 0);
   tone(1174.66, 0.12, "triangle", 0.12, 0.08);
+}
+
+function playPowerMeterBlip(power) {
+  if (power < 0.35) return;
+  const freq = 220 + power * 260;
+  tone(freq, 0.035, "triangle", 0.035, 0);
 }
 
 function setupIntroMusic() {
@@ -523,16 +545,73 @@ async function playHomeRunMusicBurst() {
   }
 }
 
-// ---------- HELPERS ----------
-function getKeypoint(pose, name, minScore = 0.28) {
-  return pose?.keypoints?.find(k => k.name === name && (k.score ?? 0) > minScore) || null;
+// ambient crowd
+function startAmbientCrowd() {
+  if (!audioCtx || !soundEnabled || ambientRunning) return;
+
+  ambientRunning = true;
+
+  if (!ambientMasterGain) {
+    ambientMasterGain = audioCtx.createGain();
+    ambientMasterGain.gain.value = 0.02;
+    ambientMasterGain.connect(audioCtx.destination);
+  }
+
+  ambientMasterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+  ambientMasterGain.gain.linearRampToValueAtTime(0.035, audioCtx.currentTime + 0.6);
+
+  ambientRumbleOsc = audioCtx.createOscillator();
+  ambientRumbleGain = audioCtx.createGain();
+
+  ambientRumbleOsc.type = "sine";
+  ambientRumbleOsc.frequency.value = 74;
+  ambientRumbleGain.gain.value = 0.010;
+
+  ambientRumbleOsc.connect(ambientRumbleGain);
+  ambientRumbleGain.connect(ambientMasterGain);
+  ambientRumbleOsc.start();
+
+  ambientCrowdInterval = setInterval(() => {
+    if (!audioCtx || !ambientRunning || !soundEnabled) return;
+
+    const base = 180 + Math.random() * 120;
+    tone(base, 0.25, "triangle", 0.012, 0);
+    tone(base * 1.18, 0.22, "triangle", 0.009, 0.04);
+
+    if (Math.random() > 0.65) {
+      tone(90 + Math.random() * 30, 0.18, "sine", 0.008, 0);
+    }
+  }, 900 + Math.random() * 600);
 }
 
+function stopAmbientCrowd() {
+  if (!ambientRunning) return;
+  ambientRunning = false;
+
+  if (ambientCrowdInterval) {
+    clearInterval(ambientCrowdInterval);
+    ambientCrowdInterval = null;
+  }
+
+  if (ambientMasterGain && audioCtx) {
+    ambientMasterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+    ambientMasterGain.gain.linearRampToValueAtTime(0.0, audioCtx.currentTime + 0.35);
+  }
+
+  if (ambientRumbleOsc) {
+    try { ambientRumbleOsc.stop(audioCtx.currentTime + 0.4); } catch(e) {}
+    ambientRumbleOsc = null;
+  }
+  ambientRumbleGain = null;
+}
+
+// ---------- HELPERS ----------
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
   canvas.width = rect.width;
   canvas.height = rect.height;
 }
+
 window.addEventListener("resize", resizeCanvas);
 
 function updateHud() {
@@ -577,24 +656,16 @@ function clearSummaryTimer() {
   }
 }
 
-function getControlContainer() {
-  return controlDock || rightPanel || null;
-}
-
 function showControlsPanel() {
-  const el = getControlContainer();
-  if (!el) return;
-  el.style.transition = "opacity 500ms ease";
-  el.style.opacity = "1";
-  el.style.pointerEvents = "auto";
+  if (!controlDock) return;
+  controlDock.classList.remove("hiddenDuringPlay");
+  controlDock.style.pointerEvents = "auto";
 }
 
 function hideControlsPanel() {
-  const el = getControlContainer();
-  if (!el) return;
-  el.style.transition = "opacity 700ms ease";
-  el.style.opacity = "0.08";
-  el.style.pointerEvents = "none";
+  if (!controlDock) return;
+  controlDock.classList.add("hiddenDuringPlay");
+  controlDock.style.pointerEvents = "none";
 }
 
 function rotateTip() {
@@ -745,6 +816,7 @@ function buildRoundSummary() {
 function endRoundToSummary() {
   clearPitchTimer();
   clearCountdownTimer();
+  stopAmbientCrowd();
 
   showRoundComplete = true;
   roundCompleteTimer = Math.round(ROUND_COMPLETE_MS / (1000 / 60));
@@ -760,6 +832,10 @@ function endRoundToSummary() {
 }
 
 // ---------- CHARACTER ----------
+function getKeypoint(pose, name, minScore = 0.28) {
+  return pose?.keypoints?.find(k => k.name === name && (k.score ?? 0) > minScore) || null;
+}
+
 function scalePoint(p, center, scale) {
   if (!p) return null;
   return {
@@ -930,8 +1006,6 @@ function drawSilhouetteFigure(pose) {
   }
 
   ctx.restore();
-
-  updateStrikeZone(p);
   return p;
 }
 
@@ -1009,6 +1083,14 @@ function updateBatVelocity(point) {
   };
 
   prevBatPoint = { ...point, t: now };
+
+  const power = clamp(batVelocity.speed / 750, 0, 1);
+  swingPowerDisplay += (power - swingPowerDisplay) * 0.35;
+  swingPowerPeak = Math.max(swingPowerPeak * 0.96, swingPowerDisplay);
+
+  if (power > 0.75 && Math.random() > 0.82 && gameState === "playing") {
+    playPowerMeterBlip(power);
+  }
 }
 
 function updateBatTrail(point) {
@@ -1022,6 +1104,7 @@ function tickBatTrail() {
     batTrail[i].life--;
     if (batTrail[i].life <= 0) batTrail.splice(i, 1);
   }
+  swingPowerPeak *= 0.985;
 }
 
 function drawBatTrail() {
@@ -1036,38 +1119,49 @@ function drawBatTrail() {
   }
 }
 
-// ---------- STRIKE ZONE + ACCURACY ----------
-function updateStrikeZone(points) {
-  if (!points || !points.leftShoulder || !points.rightShoulder || !points.leftHip || !points.rightHip) return;
-
-  const shoulderY = (points.leftShoulder.y + points.rightShoulder.y) / 2;
-  const hipY = (points.leftHip.y + points.rightHip.y) / 2;
-  const shoulderX = (points.leftShoulder.x + points.rightShoulder.x) / 2;
-
-  strikeZone = {
-    x: shoulderX + 36,
-    y: shoulderY + 8,
-    w: 72,
-    h: Math.max(70, hipY - shoulderY - 8)
-  };
-}
-
-function drawStrikeZone() {
-  if (!strikeZone) return;
+// ---------- THERMOMETER + ACCURACY ----------
+function drawSwingPowerMeter() {
+  const x = canvas.width - 70;
+  const y = canvas.height * 0.22;
+  const w = 26;
+  const h = 220;
+  const bulbR = 18;
 
   ctx.save();
-  ctx.strokeStyle = "rgba(255,255,255,0.42)";
+
+  ctx.fillStyle = "rgba(10,20,40,0.72)";
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 16);
+  ctx.fill();
+
+  const fillH = h * clamp(swingPowerPeak, 0, 1);
+  const fillY = y + h - fillH;
+
+  const grad = ctx.createLinearGradient(0, y + h, 0, y);
+  grad.addColorStop(0, "#2ed573");
+  grad.addColorStop(0.5, "#ffd43b");
+  grad.addColorStop(1, "#ff7043");
+
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(x + 4, fillY, w - 8, fillH, 12);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(x + w / 2, y + h + 18, bulbR, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
   ctx.lineWidth = 3;
-  ctx.setLineDash([8, 6]);
-  ctx.strokeRect(strikeZone.x, strikeZone.y, strikeZone.w, strikeZone.h);
+  ctx.strokeStyle = "rgba(255,255,255,0.28)";
+  ctx.stroke();
 
-  ctx.fillStyle = "rgba(255,255,255,0.05)";
-  ctx.fillRect(strikeZone.x, strikeZone.y, strikeZone.w, strikeZone.h);
-
-  ctx.fillStyle = "rgba(255,255,255,0.8)";
-  ctx.font = '900 14px "Nunito", sans-serif';
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 12px "Nunito", sans-serif';
   ctx.textAlign = "center";
-  ctx.fillText("ZONE", strikeZone.x + strikeZone.w / 2, strikeZone.y - 10);
+  ctx.fillText("SWING", x + w / 2, y - 12);
+  ctx.fillText("POWER", x + w / 2, y + h + 48);
+
   ctx.restore();
 }
 
@@ -1307,7 +1401,7 @@ function resolveMiss() {
 
   if (missFeedback === "TOO EARLY") setCoachText("Coach: Start just a little later.", 2600);
   if (missFeedback === "TOO LATE") setCoachText("Coach: Swing a little sooner.", 2600);
-  if (missFeedback === "SWING TOO HIGH") setCoachText("Coach: Bring the bat down into the zone.", 2600);
+  if (missFeedback === "SWING TOO HIGH") setCoachText("Coach: Bring the bat down a little.", 2600);
   if (missFeedback === "SWING TOO LOW") setCoachText("Coach: Lift the bat a little higher.", 2600);
 
   if (pitchesLeft <= 0) {
@@ -1981,6 +2075,7 @@ function startCountdown() {
       }
       countdownActive = false;
       gameState = "playing";
+      startAmbientCrowd();
       createPitch();
     }
   };
@@ -2082,6 +2177,9 @@ function resetRound() {
   lastTimingOffset = 0.5;
   lastTimingRating = "";
 
+  swingPowerDisplay = 0;
+  swingPowerPeak = 0;
+
   flashTimer = 0;
 
   confetti = [];
@@ -2098,7 +2196,6 @@ function resetRound() {
   roundSummary = null;
   showRoundComplete = false;
   roundCompleteTimer = 0;
-  strikeZone = null;
 
   CONTACT_DISTANCE = DIFFICULTIES[difficulty].contactDistance;
 
@@ -2146,8 +2243,8 @@ async function loop() {
     }
   }
 
-  drawStrikeZone();
   drawAccuracyMeter();
+  drawSwingPowerMeter();
   drawBatTrail();
 
   if (gameState === "playing") {
@@ -2225,6 +2322,7 @@ async function startOrResumeGame() {
       if (pauseBtn) pauseBtn.textContent = "Pause";
       if (instructionChip) instructionChip.textContent = "Game resumed.";
       hideControlsPanel();
+      startAmbientCrowd();
       if (!ball) scheduleNextPitch();
       playStartSound();
       if (!animationId) loop();
@@ -2251,6 +2349,7 @@ function togglePause() {
     if (pauseBtn) pauseBtn.textContent = "Resume";
     clearPitchTimer();
     clearCountdownTimer();
+    stopAmbientCrowd();
     showControlsPanel();
     if (instructionChip) instructionChip.textContent = "Game paused.";
     return;
@@ -2260,6 +2359,7 @@ function togglePause() {
     gameState = "paused";
     countdownActive = false;
     clearCountdownTimer();
+    stopAmbientCrowd();
     if (pauseBtn) pauseBtn.textContent = "Resume";
     showControlsPanel();
     if (instructionChip) instructionChip.textContent = "Game paused.";
@@ -2274,6 +2374,7 @@ function togglePause() {
     } else {
       gameState = "playing";
       hideControlsPanel();
+      startAmbientCrowd();
       if (instructionChip) instructionChip.textContent = "Game resumed.";
       if (!ball) scheduleNextPitch();
       playStartSound();
@@ -2285,6 +2386,18 @@ function resetGame() {
   clearPitchTimer();
   clearCountdownTimer();
   clearSummaryTimer();
+  stopAmbientCrowd();
+
+  if (introMusic && !introMusic.paused) {
+    introMusic.pause();
+    introMusic.currentTime = 0;
+  }
+
+  if (homeRunMusic && !homeRunMusic.paused) {
+    homeRunMusic.pause();
+    homeRunMusic.currentTime = 0;
+  }
+
   resetRound();
   gameState = "start";
   showSplashScreen();
@@ -2321,6 +2434,7 @@ if (muteBtn) {
       playStartSound();
     } else {
       muteBtn.textContent = "Sound: Off";
+      stopAmbientCrowd();
       if (introMusic && !introMusic.paused) introMusic.pause();
       if (homeRunMusic && !homeRunMusic.paused) homeRunMusic.pause();
     }
