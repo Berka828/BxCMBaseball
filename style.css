@@ -178,10 +178,6 @@ body{background:#000}
   pointer-events:none;
 }
 
-.bottomStatCard:hover{
-  transform:translateY(-2px);
-}
-
 .bottomStatLabel{
   font-size:13px;
   font-weight:900;
@@ -229,12 +225,19 @@ body{background:#000}
   gap:10px;
   padding:14px;
   border-radius:22px;
-  background:rgba(8,18,40,.58);
+  background:rgba(8,18,40,.74);
   border:1px solid var(--line);
   pointer-events:auto;
-  opacity:.14;
-  transition:opacity .5s ease;
+  opacity:1;
+  transition:opacity .5s ease, transform .5s ease;
   box-shadow:0 14px 30px rgba(0,0,0,.20);
+  z-index:60;
+}
+
+.controlDock.hiddenDuringPlay{
+  opacity:0;
+  pointer-events:none;
+  transform:translateY(-10px);
 }
 
 .controlDock button{
@@ -371,7 +374,8 @@ body{background:#000}
   align-items:center;
   justify-content:center;
   overflow:hidden;
-  background:radial-gradient(circle at center, #132347 0%, #060c18 55%, #02050a 100%);
+  background:
+    radial-gradient(circle at center, #172b57 0%, #060c18 52%, #02050a 100%);
   opacity:1;
   visibility:visible;
   pointer-events:auto;
@@ -388,22 +392,67 @@ body{background:#000}
   position:absolute;
   inset:-8%;
   background:
-    radial-gradient(circle at 20% 20%, rgba(255, 204, 0, 0.16), transparent 26%),
-    radial-gradient(circle at 75% 25%, rgba(132, 76, 255, 0.18), transparent 26%),
-    radial-gradient(circle at 50% 78%, rgba(0, 173, 239, 0.16), transparent 28%);
+    radial-gradient(circle at 18% 22%, rgba(255, 204, 0, 0.18), transparent 26%),
+    radial-gradient(circle at 78% 20%, rgba(132, 76, 255, 0.22), transparent 26%),
+    radial-gradient(circle at 50% 78%, rgba(0, 173, 239, 0.20), transparent 28%);
   filter:blur(18px);
   animation:splashDrift 12s ease-in-out infinite alternate;
 }
 
 .splashGlow{
   position:absolute;
-  width:70vmin;
-  height:70vmin;
+  width:74vmin;
+  height:74vmin;
   border-radius:50%;
-  background:radial-gradient(circle, rgba(255, 214, 61, 0.18) 0%, rgba(255, 214, 61, 0.05) 35%, transparent 70%);
+  background:radial-gradient(circle, rgba(255, 214, 61, 0.20) 0%, rgba(255, 214, 61, 0.05) 35%, transparent 70%);
   filter:blur(14px);
   animation:splashPulse 4s ease-in-out infinite;
 }
+
+.splashRings{
+  position:absolute;
+  width:90vmin;
+  height:90vmin;
+  border-radius:50%;
+  border:2px solid rgba(255,255,255,0.07);
+  animation:splashRingPulse 3.4s ease-in-out infinite;
+}
+
+.splashRings::before,
+.splashRings::after{
+  content:"";
+  position:absolute;
+  inset:10%;
+  border-radius:50%;
+  border:2px solid rgba(255,255,255,0.05);
+}
+.splashRings::after{
+  inset:22%;
+}
+
+.splashSparkles{
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+}
+
+.splashSparkles span{
+  position:absolute;
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:#fff;
+  box-shadow:0 0 18px rgba(255,255,255,.85);
+  opacity:.55;
+  animation:sparkleFloat 4s ease-in-out infinite;
+}
+
+.splashSparkles span:nth-child(1){ top:18%; left:22%; animation-delay:0s; background:#ffd43b; }
+.splashSparkles span:nth-child(2){ top:28%; right:20%; animation-delay:.4s; background:#25a9ff; }
+.splashSparkles span:nth-child(3){ bottom:24%; left:18%; animation-delay:.8s; background:#7d4dff; }
+.splashSparkles span:nth-child(4){ bottom:18%; right:24%; animation-delay:1.2s; background:#2ed573; }
+.splashSparkles span:nth-child(5){ top:48%; left:12%; animation-delay:1.6s; background:#ffd43b; }
+.splashSparkles span:nth-child(6){ top:54%; right:10%; animation-delay:2s; background:#25a9ff; }
 
 .splashInner{
   position:relative;
@@ -470,7 +519,10 @@ body{background:#000}
   cursor:pointer;
   color:#14213d;
   background:linear-gradient(180deg,#ffd84d 0%,#ffbe0b 100%);
-  box-shadow:0 14px 34px rgba(255,190,11,.30), 0 0 0 4px rgba(255,255,255,.10);
+  box-shadow:
+    0 14px 34px rgba(255,190,11,.30),
+    0 0 0 4px rgba(255,255,255,.10),
+    0 0 40px rgba(255,212,59,.22);
   animation:startBtnPulse 1.5s ease-in-out infinite;
   transition:transform 180ms ease, box-shadow 180ms ease;
   text-transform:uppercase;
@@ -478,7 +530,10 @@ body{background:#000}
 
 .splashStartBtn:hover{
   transform:translateY(-2px) scale(1.02);
-  box-shadow:0 18px 42px rgba(255,190,11,.40), 0 0 0 4px rgba(255,255,255,.14);
+  box-shadow:
+    0 18px 42px rgba(255,190,11,.40),
+    0 0 0 4px rgba(255,255,255,.14),
+    0 0 56px rgba(255,212,59,.32);
 }
 
 .splashHint{
@@ -533,6 +588,18 @@ body{background:#000}
   0%{transform:scale(1)}
   50%{transform:scale(1.04)}
   100%{transform:scale(1)}
+}
+
+@keyframes splashRingPulse{
+  0%{transform:scale(.96); opacity:.35}
+  50%{transform:scale(1.02); opacity:.65}
+  100%{transform:scale(.96); opacity:.35}
+}
+
+@keyframes sparkleFloat{
+  0%{transform:translateY(0) scale(1); opacity:.35}
+  50%{transform:translateY(-12px) scale(1.4); opacity:.9}
+  100%{transform:translateY(0) scale(1); opacity:.35}
 }
 
 @keyframes statFloat {
