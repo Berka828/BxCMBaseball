@@ -815,6 +815,7 @@ function getScaledPosePoints(pose) {
 function drawSilhouetteFigure(pose) {
   const p = getScaledPosePoints(pose);
 
+  const nose = p.nose;
   const ls = p.leftShoulder;
   const rs = p.rightShoulder;
   const le = p.leftElbow;
@@ -827,19 +828,127 @@ function drawSilhouetteFigure(pose) {
   const rk = p.rightKnee;
   const la = p.leftAnkle;
   const ra = p.rightAnkle;
-  const nose = p.nose;
 
-  const joints = [ls, rs, le, re, lw, rw, lh, rh, lk, rk, la, ra, nose].filter(Boolean);
+  const joints = [nose, ls, rs, le, re, lw, rw, lh, rh, lk, rk, la, ra].filter(Boolean);
   if (joints.length < 4) return null;
 
   const neck = ls && rs ? { x: (ls.x + rs.x) / 2, y: (ls.y + rs.y) / 2 } : null;
   const pelvis = lh && rh ? { x: (lh.x + rh.x) / 2, y: (lh.y + rh.y) / 2 } : null;
 
+  // proportions for a chunkier, more kid-friendly character
+  const shoulderWidth = ls && rs ? Math.hypot(rs.x - ls.x, rs.y - ls.y) : 70;
+  const torsoW = Math.max(44, shoulderWidth * 0.82);
+  const torsoH = neck && pelvis ? Math.max(78, Math.hypot(pelvis.x - neck.x, pelvis.y - neck.y) * 1.05) : 120;
+  const headR = Math.max(20, Math.min(34, shoulderWidth * 0.34));
+
   ctx.save();
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  ctx.shadowBlur = 22;
-  ctx.shadowColor = "rgba(37,169,255,0.28)";
+
+  function capsule(a, b, width, color, alpha = 1) {
+    if (!a || !b) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = color;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function circle(pt, r, color, alpha = 1) {
+    if (!pt) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = color;
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // colors
+  const headColor = "rgba(125,77,255,0.92)";
+  const bodyColor = "rgba(37,169,255,0.82)";
+  const limbColor = "rgba(46,213,115,0.80)";
+  const accentColor = "rgba(255,212,59,0.92)";
+
+  // head
+  if (nose && neck) {
+    const headCenter = { x: nose.x, y: nose.y - headR * 0.12 };
+    circle(headCenter, headR, headColor, 0.95);
+
+    // tiny visor/face band to make it feel more "character-like"
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.beginPath();
+    ctx.ellipse(headCenter.x, headCenter.y - 2, headR * 0.62, headR * 0.24, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // torso blob
+  if (neck && pelvis) {
+    const torsoCenter = {
+      x: (neck.x + pelvis.x) / 2,
+      y: (neck.y + pelvis.y) / 2
+    };
+
+    ctx.save();
+    ctx.translate(torsoCenter.x, torsoCenter.y);
+    ctx.fillStyle = bodyColor;
+    ctx.shadowBlur = 26;
+    ctx.shadowColor = "rgba(37,169,255,0.55)";
+    ctx.beginPath();
+    ctx.roundRect(-torsoW / 2, -torsoH / 2, torsoW, torsoH, 26);
+    ctx.fill();
+
+    // chest accent
+    ctx.fillStyle = "rgba(255,255,255,0.15)";
+    ctx.beginPath();
+    ctx.roundRect(-torsoW * 0.28, -torsoH * 0.22, torsoW * 0.56, torsoH * 0.18, 12);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // shoulders / hips anchors
+  circle(ls, 10, bodyColor, 0.9);
+  circle(rs, 10, bodyColor, 0.9);
+  circle(lh, 10, bodyColor, 0.85);
+  circle(rh, 10, bodyColor, 0.85);
+
+  // arms
+  capsule(ls, le, 18, limbColor, 0.88);
+  capsule(le, lw, 14, limbColor, 0.84);
+  capsule(rs, re, 18, limbColor, 0.88);
+  capsule(re, rw, 14, limbColor, 0.84);
+
+  // legs
+  capsule(lh, lk, 20, limbColor, 0.80);
+  capsule(lk, la, 16, limbColor, 0.76);
+  capsule(rh, rk, 20, limbColor, 0.80);
+  capsule(rk, ra, 16, limbColor, 0.76);
+
+  // hands / feet accents
+  circle(lw, 8, accentColor, 0.95);
+  circle(rw, 8, accentColor, 0.95);
+  circle(la, 8, accentColor, 0.75);
+  circle(ra, 8, accentColor, 0.75);
+
+  // optional subtle center line
+  if (neck && pelvis) {
+    capsule(neck, pelvis, 8, "rgba(255,255,255,0.18)", 0.65);
+  }
+
+  ctx.restore();
+  return p;
+}
 
   function pipe(a, b, width, color) {
     if (!a || !b) return;
