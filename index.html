@@ -2,45 +2,26 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BxCM Jr. Sluggers Academy</title>
-
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@700;800;900&display=swap"
-    rel="stylesheet"
-  >
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
 
-  <link rel="stylesheet" href="./style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 </head>
 <body>
-  <div class="appShell preGame" id="appShell">
-    <video id="video" playsinline muted autoplay></video>
+  <div class="appShell">
+    <video id="video" playsinline muted></video>
     <canvas id="canvas"></canvas>
 
-    <div class="splashScreen" id="splashScreen">
-      <div class="splashInner">
-        <img id="splashLogo" src="./bxcm-logo.png" alt="Bronx Children's Museum logo" />
-
-        <div class="splashTitleBlock">
-          <h1>BxCM Jr. Sluggers Academy</h1>
-          <p>Swing big. Make contact. Chase the high score.</p>
-        </div>
-
-        <div class="splashAction">
-          <button id="splashStartBtn" class="ctaBtn primaryBtn" type="button">Start Game</button>
-        </div>
-
-        <div class="splashSubtext">
-          Powered by Bronx Children’s Museum
-        </div>
-      </div>
-    </div>
-
-    <div class="topRow chrome">
+    <div class="topRow">
       <div class="overlay logoPanel">
-        <img id="bxcmLogo" src="./bxcm-logo.png" alt="Bronx Children's Museum logo">
+        <img id="bxcmLogo" src="bxcm-logo.png" alt="Bronx Children's Museum logo">
       </div>
 
       <div class="overlay titlePanel">
@@ -60,7 +41,7 @@
       </div>
     </div>
 
-    <div class="leftStats chrome">
+    <div class="leftStats">
       <div class="overlay statBox">
         <span>HITS</span>
         <strong id="hitsEl">0</strong>
@@ -77,27 +58,28 @@
       </div>
     </div>
 
-    <div class="overlay miniMapWrap chrome">
+    <div class="overlay miniMapWrap">
+      <div class="miniMapLabel">Right-handed</div>
       <canvas id="miniMapCanvas" width="220" height="130"></canvas>
     </div>
 
-    <div class="overlay instructionChip chrome" id="instructionChip">
-      Press Start to begin.
+    <div class="overlay instructionChip" id="instructionChip">
+      Big upward swings can turn doubles into triples. Home runs trigger a giant celebration.
     </div>
 
-    <div class="overlay rightPanel chrome" id="controlsPanel">
+    <div class="overlay rightPanel" id="controlsPanel">
       <h2>Controls</h2>
 
-      <button id="startBtn" class="ctaBtn primaryBtn" type="button">Start Game</button>
-      <button id="pauseBtn" class="ctaBtn secondaryBtn" type="button">Pause Game</button>
-      <button id="resetBtn" class="ctaBtn secondaryBtn" type="button">Reset Game</button>
-      <button id="muteBtn" class="ctaBtn soundBtn" type="button">Sound: On</button>
+      <button id="startBtn" class="ctaBtn primaryBtn">Start Game</button>
+      <button id="pauseBtn" class="ctaBtn secondaryBtn">Pause Game</button>
+      <button id="resetBtn" class="ctaBtn secondaryBtn">Reset Game</button>
+      <button id="muteBtn" class="ctaBtn soundBtn">Sound: On</button>
 
       <div class="controlGroup">
         <label>Batting Side</label>
         <div class="sideToggle">
-          <button id="rightHandBtn" class="toggleBtn active" type="button">Right</button>
-          <button id="leftHandBtn" class="toggleBtn" type="button">Left</button>
+          <button id="rightHandBtn" class="toggleBtn active">Right</button>
+          <button id="leftHandBtn" class="toggleBtn">Left</button>
         </div>
       </div>
 
@@ -120,9 +102,9 @@
       <div class="controlGroup">
         <div class="sliderHeader">
           <label for="pitchDelay">Reset Between Pitches</label>
-          <span id="pitchDelayVal">3s</span>
+          <span id="pitchDelayVal">1.5s</span>
         </div>
-        <input id="pitchDelay" type="range" min="0.5" max="4" step="0.1" value="3">
+        <input id="pitchDelay" type="range" min="0.5" max="4" step="0.1" value="1.5">
       </div>
 
       <div class="helpText">
@@ -131,6 +113,6 @@
     </div>
   </div>
 
-  <script src="./game.js" defer></script>
+  <script src="game.js"></script>
 </body>
 </html>
