@@ -158,6 +158,16 @@ let roundCompleteTimer = 0;
 let screenShakeTimer = 0;
 let screenShakeAmount = 0;
 
+let strikeZone = null;
+let accuracyMarkerTimer = 0;
+let lastTimingOffset = 0;
+let lastTimingRating = "";
+let coachText = "";
+let coachTextTimer = 0;
+let crowdText = "";
+let crowdTextTimer = 0;
+let crowdMood = "quiet";
+
 const BALL_RADIUS = 14;
 const GRAVITY = 0.44;
 let CONTACT_DISTANCE = DIFFICULTIES[difficulty].contactDistance;
@@ -192,6 +202,10 @@ let stadiumBgLoaded = false;
 stadiumBg.onload = () => { stadiumBgLoaded = true; };
 stadiumBg.onerror = () => { console.error("Background image failed to load."); };
 stadiumBg.src = "./stadium-bg.png";
+
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
 
 function drawImageCover(img, alpha = 1) {
   if (!img || !img.width || !img.height) return;
@@ -291,7 +305,6 @@ function drawBattingCageBackground(alpha = 1) {
 
   ctx.fillStyle = "rgba(0,0,0,0.20)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-
   ctx.restore();
 }
 
@@ -303,15 +316,13 @@ function drawBackground() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
-  // normal darkening for readability
   ctx.fillStyle = "rgba(0, 0, 0, 0.52)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // during active home run moments, blend in the batting cage look
   const shouldBlendCage =
     (ball && ball.result === "HOME RUN!" && ball.hit) ||
     flashTimer > 8 ||
-    homeRuns > 0 && hitText.includes("HOME RUN!");
+    (homeRuns > 0 && hitText.includes("HOME RUN!"));
 
   if (shouldBlendCage) {
     drawBattingCageBackground(0.62);
@@ -395,6 +406,17 @@ function playHomeRunSound() {
   tone(659.25, 0.12, "triangle", 0.14, 0.16);
   tone(783.99, 0.18, "triangle", 0.14, 0.26);
   tone(1046.5, 0.20, "triangle", 0.12, 0.42);
+}
+
+function playBooSound() {
+  tone(180, 0.10, "sawtooth", 0.08, 0);
+  tone(150, 0.16, "sawtooth", 0.06, 0.08);
+}
+
+function playCheerSound() {
+  tone(520, 0.08, "triangle", 0.10, 0);
+  tone(620, 0.10, "triangle", 0.10, 0.07);
+  tone(760, 0.12, "triangle", 0.10, 0.16);
 }
 
 function playCountdownBeep(num) {
@@ -581,6 +603,38 @@ function rotateTip() {
   }
 }
 
+function setCoachText(text, ms = 2200) {
+  coachText = text;
+  coachTextTimer = Math.round(ms / (1000 / 60));
+}
+
+function setCrowdText(text, ms = 1800) {
+  crowdText = text;
+  crowdTextTimer = Math.round(ms / (1000 / 60));
+}
+
+function updateCrowdMood(type) {
+  if (type === "home_run") {
+    crowdMood = "wild";
+    setCrowdText("CROWD GOES WILD!", 2200);
+    playCheerSound();
+    return;
+  }
+  if (type === "big_hit") {
+    crowdMood = "cheer";
+    setCrowdText("BIG CHEER!", 1800);
+    playCheerSound();
+    return;
+  }
+  if (type === "miss") {
+    crowdMood = "boo";
+    setCrowdText("OOOH!", 1500);
+    playBooSound();
+    return;
+  }
+  crowdMood = "quiet";
+}
+
 function scheduleNextPitch(extraDelayMs = 0) {
   clearPitchTimer();
 
@@ -598,6 +652,7 @@ function scheduleNextPitch(extraDelayMs = 0) {
       if (instructionChip) {
         instructionChip.textContent = "Swing across your body to meet the ball.";
       }
+      setCoachText("Coach: Eyes on the ball.");
     }
   }, delayMs);
 }
@@ -699,6 +754,7 @@ function endRoundToSummary() {
     roundSummary = buildRoundSummary();
     gameState = "summary";
     showControlsPanel();
+    setCoachText("Coach: Review the round and press Reset when you're ready.", 5000);
   }, ROUND_COMPLETE_MS + 2200);
 }
 
@@ -873,6 +929,8 @@ function drawSilhouetteFigure(pose) {
   }
 
   ctx.restore();
+
+  updateStrikeZone(p);
   return p;
 }
 
@@ -977,438 +1035,459 @@ function drawBatTrail() {
   }
 }
 
-// ---------- OVERLAYS ----------
-function drawDistanceOverlay() {
-  if (gameState === "playing" && ball && ball.hit && currentDistanceFt > 0) {
-    ctx.save();
-    ctx.textAlign = "center";
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = "#14304b";
-    ctx.fillStyle = "#ffd43b";
-    ctx.font = '900 42px "Baloo 2", sans-serif';
-    ctx.strokeText(`${Math.round(currentDistanceFt)} FT`, canvas.width / 2, canvas.height * 0.14);
-    ctx.fillText(`${Math.round(currentDistanceFt)} FT`, canvas.width / 2, canvas.height * 0.14);
-    ctx.restore();
-  }
+// ---------- STRIKE ZONE + ACCURACY ----------
+function updateStrikeZone(points) {
+  if (!points || !points.leftShoulder || !points.rightShoulder || !points.leftHip || !points.rightHip) return;
 
-  if (distanceTextTimer > 0) {
-    const alpha = Math.min(1, distanceTextTimer / 24);
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.textAlign = "center";
-    ctx.lineWidth = 7;
-    ctx.strokeStyle = "#14304b";
-    ctx.fillStyle = "#25a9ff";
-    ctx.font = '900 34px "Baloo 2", sans-serif';
-    ctx.strokeText(distanceText, canvas.width / 2, canvas.height * 0.36);
-    ctx.fillText(distanceText, canvas.width / 2, canvas.height * 0.36);
-    ctx.restore();
+  const shoulderY = (points.leftShoulder.y + points.rightShoulder.y) / 2;
+  const hipY = (points.leftHip.y + points.rightHip.y) / 2;
+  const shoulderX = (points.leftShoulder.x + points.rightShoulder.x) / 2;
 
-    distanceTextTimer--;
-  }
+  strikeZone = {
+    x: shoulderX + 36,
+    y: shoulderY + 8,
+    w: 72,
+    h: Math.max(70, hipY - shoulderY - 8)
+  };
 }
 
-function drawMissOverlay() {
-  if (missTextTimer <= 0) return;
+function drawStrikeZone() {
+  if (!strikeZone) return;
 
-  const alpha = Math.min(1, missTextTimer / 24);
   ctx.save();
-  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = "rgba(255,255,255,0.42)";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([8, 6]);
+  ctx.strokeRect(strikeZone.x, strikeZone.y, strikeZone.w, strikeZone.h);
+
+  ctx.fillStyle = "rgba(255,255,255,0.05)";
+  ctx.fillRect(strikeZone.x, strikeZone.y, strikeZone.w, strikeZone.h);
+
+  ctx.fillStyle = "rgba(255,255,255,0.8)";
+  ctx.font = '900 14px "Nunito", sans-serif';
   ctx.textAlign = "center";
-  ctx.lineWidth = 7;
-  ctx.strokeStyle = "#14304b";
+  ctx.fillText("ZONE", strikeZone.x + strikeZone.w / 2, strikeZone.y - 10);
+  ctx.restore();
+}
+
+function drawAccuracyMeter() {
+  const meterW = 240;
+  const meterH = 18;
+  const x = canvas.width * 0.5 - meterW / 2;
+  const y = canvas.height * 0.08;
+
+  ctx.save();
+
+  ctx.fillStyle = "rgba(10,20,40,0.72)";
+  ctx.beginPath();
+  ctx.roundRect(x, y, meterW, meterH, 12);
+  ctx.fill();
+
   ctx.fillStyle = "#ff9f1a";
-  ctx.font = '900 38px "Baloo 2", sans-serif';
-  ctx.strokeText(missText, canvas.width / 2, canvas.height * 0.32);
-  ctx.fillText(missText, canvas.width / 2, canvas.height * 0.32);
-  ctx.restore();
-
-  missTextTimer--;
-}
-
-function drawBaseballIcon(x, y, r, active = true) {
-  ctx.save();
-  ctx.globalAlpha = active ? 1 : 0.28;
-  ctx.fillStyle = "#ffffff";
   ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.roundRect(x + 4, y + 4, meterW * 0.38, meterH - 8, 8);
   ctx.fill();
-
-  ctx.strokeStyle = "#d64545";
-  ctx.lineWidth = 1.5;
-
-  ctx.beginPath();
-  ctx.arc(x - 3, y, r - 4, -1.1, 1.1);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.arc(x + 3, y, r - 4, 2.0, 4.2);
-  ctx.stroke();
-
-  ctx.restore();
-}
-
-function drawPitchIconsRow() {
-  const total = roundPitches;
-  const gap = 24;
-  const r = 8;
-  const rowWidth = (total - 1) * gap;
-  const startX = canvas.width / 2 - rowWidth / 2;
-  const y = canvas.height - 148;
-
-  for (let i = 0; i < total; i++) {
-    const active = i < pitchesLeft;
-    drawBaseballIcon(startX + i * gap, y, r, active);
-  }
-}
-
-function drawBadge(cx, cy, label) {
-  ctx.save();
-
-  ctx.beginPath();
-  ctx.arc(cx, cy, 64, 0, Math.PI * 2);
-  ctx.fillStyle = "#ffd43b";
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.arc(cx, cy, 52, 0, Math.PI * 2);
-  ctx.fillStyle = "#25a9ff";
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.arc(cx, cy, 40, 0, Math.PI * 2);
-  ctx.fillStyle = "#7d4dff";
-  ctx.fill();
-
-  ctx.fillStyle = "#ffffff";
-  ctx.font = '900 16px "Baloo 2", sans-serif';
-  ctx.textAlign = "center";
-  ctx.fillText("BxCM", cx, cy - 8);
-  ctx.font = '900 12px "Nunito", sans-serif';
-  ctx.fillText(label, cx, cy + 14);
-
-  ctx.restore();
-}
-
-function drawRoundCompleteOverlay() {
-  if (!showRoundComplete) return;
-
-  const alpha = Math.min(1, roundCompleteTimer / 24);
-
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.textAlign = "center";
-  ctx.shadowBlur = 30;
-  ctx.shadowColor = "#ffd43b";
-  ctx.fillStyle = "#ffd43b";
-  ctx.strokeStyle = "#14304b";
-  ctx.lineWidth = 10;
-  ctx.font = '900 72px "Baloo 2", sans-serif';
-  ctx.strokeText("ROUND COMPLETE", canvas.width / 2, canvas.height * 0.46);
-  ctx.fillText("ROUND COMPLETE", canvas.width / 2, canvas.height * 0.46);
-  ctx.restore();
-
-  if (roundCompleteTimer > 0) roundCompleteTimer--;
-}
-
-function drawPauseOverlay() {
-  ctx.fillStyle = "rgba(0,0,0,0.26)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#ffd54f";
-  ctx.font = '900 64px "Baloo 2", sans-serif';
-  ctx.fillText("PAUSED", canvas.width / 2, canvas.height * 0.35);
-
-  ctx.fillStyle = "#ffffff";
-  ctx.font = '900 28px "Nunito", sans-serif';
-  ctx.fillText("Press Space or Pause again to keep playing.", canvas.width / 2, canvas.height * 0.43);
-}
-
-function drawStartOverlay() {
-  ctx.fillStyle = "rgba(0,0,0,0.20)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#ffd54f";
-  ctx.font = '900 60px "Baloo 2", sans-serif';
-  ctx.fillText("PRESS START", canvas.width / 2, canvas.height * 0.33);
-
-  ctx.fillStyle = "#ffffff";
-  ctx.font = '900 28px "Nunito", sans-serif';
-  ctx.fillText("Press the button to begin.", canvas.width / 2, canvas.height * 0.41);
-}
-
-function drawSummaryOverlay() {
-  if (!roundSummary) return;
-
-  ctx.fillStyle = "rgba(0,0,0,0.35)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  drawBadge(canvas.width / 2, canvas.height * 0.24, roundSummary.badge);
-
-  ctx.save();
-  ctx.textAlign = "center";
-
-  ctx.fillStyle = "#ffd43b";
-  ctx.font = '900 54px "Baloo 2", sans-serif';
-  ctx.fillText(roundSummary.title, canvas.width / 2, canvas.height * 0.40);
-
-  ctx.fillStyle = "#ffffff";
-  ctx.font = '900 28px "Nunito", sans-serif';
-  ctx.fillText(roundSummary.message, canvas.width / 2, canvas.height * 0.50);
-
-  ctx.font = '800 24px "Nunito", sans-serif';
-  ctx.fillStyle = "#25a9ff";
-  ctx.fillText(`Best Distance: ${Math.round(bestDistanceFt)} FT`, canvas.width / 2, canvas.height * 0.58);
 
   ctx.fillStyle = "#2ed573";
-  ctx.fillText(`Hits: ${hits}   •   Home Runs: ${homeRuns}`, canvas.width / 2, canvas.height * 0.65);
+  ctx.beginPath();
+  ctx.roundRect(x + meterW * 0.38, y + 4, meterW * 0.24, meterH - 8, 8);
+  ctx.fill();
+
+  ctx.fillStyle = "#ff9f1a";
+  ctx.beginPath();
+  ctx.roundRect(x + meterW * 0.62, y + 4, meterW * 0.34, meterH - 8, 8);
+  ctx.fill();
 
   ctx.fillStyle = "#ffffff";
-  ctx.font = '800 22px "Nunito", sans-serif';
-  ctx.fillText(roundSummary.tip, canvas.width / 2, canvas.height * 0.75);
-
-  ctx.fillStyle = "rgba(255,255,255,0.86)";
-  ctx.font = '800 18px "Nunito", sans-serif';
-  ctx.fillText("Administrator: press Reset to return to splash.", canvas.width / 2, canvas.height * 0.85);
-
-  ctx.restore();
-}
-
-function drawCountdownOverlay() {
-  ctx.fillStyle = "rgba(0,0,0,0.18)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+  ctx.font = '900 12px "Nunito", sans-serif';
   ctx.textAlign = "center";
-  ctx.fillStyle = "#ffd54f";
-  ctx.lineWidth = 8;
-  ctx.strokeStyle = "#14304b";
+  ctx.fillText("EARLY", x + meterW * 0.18, y - 6);
+  ctx.fillText("PERFECT", x + meterW * 0.50, y - 6);
+  ctx.fillText("LATE", x + meterW * 0.79, y - 6);
 
-  if (countdownValue > 0) {
-    ctx.font = '900 120px "Baloo 2", sans-serif';
-    ctx.strokeText(String(countdownValue), canvas.width / 2, canvas.height * 0.45);
-    ctx.fillText(String(countdownValue), canvas.width / 2, canvas.height * 0.45);
+  if (accuracyMarkerTimer > 0) {
+    const markerX = clamp(x + meterW * lastTimingOffset, x + 6, x + meterW - 6);
 
-    ctx.fillStyle = "#ffffff";
-    ctx.font = '900 28px "Nunito", sans-serif';
-    ctx.fillText("Get set...", canvas.width / 2, canvas.height * 0.55);
-  } else {
-    ctx.font = '900 90px "Baloo 2", sans-serif';
-    ctx.strokeText("SWING!", canvas.width / 2, canvas.height * 0.45);
-    ctx.fillText("SWING!", canvas.width / 2, canvas.height * 0.45);
-  }
-}
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(markerX, y - 4);
+    ctx.lineTo(markerX, y + meterH + 4);
+    ctx.stroke();
 
-// ---------- FX ----------
-function getShakeOffset() {
-  if (screenShakeTimer <= 0) return { x: 0, y: 0 };
-  screenShakeTimer--;
-  return {
-    x: (Math.random() - 0.5) * screenShakeAmount,
-    y: (Math.random() - 0.5) * screenShakeAmount
-  };
-}
+    ctx.fillStyle = lastTimingRating === "PERFECT!" ? "#2ed573" : "#ffffff";
+    ctx.font = '900 14px "Baloo 2", sans-serif';
+    ctx.fillText(lastTimingRating, x + meterW / 2, y + 38);
 
-function updateAndDrawConfetti() {
-  for (let i = confetti.length - 1; i >= 0; i--) {
-    const p = confetti[i];
-    p.x += p.vx;
-    p.y += p.vy;
-    p.vy += 0.20;
-    p.life--;
-
-    ctx.fillStyle = p.color;
-    ctx.fillRect(p.x, p.y, p.size, p.size * 0.7);
-
-    if (p.life <= 0) confetti.splice(i, 1);
-  }
-}
-
-function drawStar(x, y, r, color) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.fillStyle = color;
-  ctx.beginPath();
-
-  for (let i = 0; i < 5; i++) {
-    const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
-    const sx = Math.cos(a) * r;
-    const sy = Math.sin(a) * r;
-    if (i === 0) ctx.moveTo(sx, sy);
-    else ctx.lineTo(sx, sy);
-    const a2 = a + Math.PI / 5;
-    ctx.lineTo(Math.cos(a2) * r * 0.45, Math.sin(a2) * r * 0.45);
+    accuracyMarkerTimer--;
   }
 
-  ctx.closePath();
-  ctx.fill();
   ctx.restore();
 }
 
-function updateAndDrawStars() {
-  for (let i = floatingStars.length - 1; i >= 0; i--) {
-    const s = floatingStars[i];
-    s.y += s.vy;
-    s.life--;
-    drawStar(s.x, s.y, s.size * 0.5, "rgba(255, 213, 79, 0.9)");
-    if (s.life <= 0) floatingStars.splice(i, 1);
-  }
+function setAccuracyMarker(offset, rating) {
+  lastTimingOffset = clamp(offset, 0, 1);
+  lastTimingRating = rating;
+  accuracyMarkerTimer = Math.round(2200 / (1000 / 60));
 }
 
-function updateAndDrawHomerBursts() {
-  for (let i = homerBursts.length - 1; i >= 0; i--) {
-    const b = homerBursts[i];
-    b.radius += 10;
-    b.life--;
+// ---------- TIMING ----------
+function getTimingFeedback(batTip, ballObj) {
+  const diff = batTip.x - ballObj.x;
+  const absDiff = Math.abs(diff);
 
-    ctx.save();
-    ctx.strokeStyle = b.color;
-    ctx.lineWidth = 6;
-    ctx.globalAlpha = Math.max(b.life / 30, 0);
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-
-    if (b.life <= 0) homerBursts.splice(i, 1);
+  if (absDiff <= 16) {
+    setAccuracyMarker(0.50, "PERFECT!");
+    return { label: "PERFECT!", powerBonus: 1.14, direction: 1.0 };
   }
+
+  if (diff < -16) {
+    setAccuracyMarker(0.22, "TOO EARLY");
+    return { label: "TOO EARLY", powerBonus: 0.86, direction: 0.92 };
+  }
+
+  setAccuracyMarker(0.80, "TOO LATE");
+  return { label: "TOO LATE", powerBonus: 0.84, direction: 1.05 };
 }
 
-function updateAndDrawHomerTrailParticles() {
-  for (let i = homerTrailParticles.length - 1; i >= 0; i--) {
-    const p = homerTrailParticles[i];
-    p.x += p.vx;
-    p.y += p.vy;
-    p.life--;
+// ---------- BALL ----------
+function createPitch() {
+  if (pitchesLeft <= 0) return;
+  if (gameState !== "playing") return;
+  if (ball) return;
 
-    ctx.save();
-    ctx.globalAlpha = Math.max(p.life / 24, 0);
-    ctx.fillStyle = p.color;
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+  CONTACT_DISTANCE = DIFFICULTIES[difficulty].contactDistance;
+  const scale = DIFFICULTIES[difficulty].ballScale;
 
-    if (p.life <= 0) homerTrailParticles.splice(i, 1);
-  }
+  ball = {
+    x: canvas.width * 0.88,
+    y: canvas.height * (0.56 + Math.random() * 0.06),
+    vx: -(parseFloat(pitchSpeedSlider?.value || "12")) - Math.random() * 1.2,
+    vy: (Math.random() - 0.5) * 0.18,
+    size: BALL_RADIUS * scale,
+    hit: false,
+    active: true,
+    trail: [],
+    result: "",
+    estimatedDistanceFt: 0,
+    contactX: 0
+  };
+
+  playPitchSound();
+  setCoachText("Coach: Track it all the way in.");
 }
 
-function drawHitOverlay() {
-  if (hitTextTimer > 0) {
-    const alpha = Math.min(1, hitTextTimer / 24);
-    const scale = 1 + Math.sin((90 - hitTextTimer) * 0.10) * 0.03;
-
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.translate(canvas.width / 2, canvas.height * 0.22);
-    ctx.scale(scale, scale);
-
-    ctx.textAlign = "center";
-    ctx.lineWidth = 9;
-    ctx.strokeStyle = "#14304b";
-    ctx.fillStyle = hitText.includes("HOME RUN!") ? "#ffd54f" : "#ffffff";
-    ctx.font = '900 56px "Baloo 2", sans-serif';
-    ctx.strokeText(hitText, 0, 0);
-    ctx.fillText(hitText, 0, 0);
-    ctx.restore();
-
-    hitTextTimer--;
+function classifyHit(power, upwardSwing) {
+  if (power > 1.9 && upwardSwing > 0.6) {
+    return { label: "HOME RUN!", points: 80, confettiCount: 42, launchBoost: 1.28 };
   }
-
-  if (timingTextTimer > 0) {
-    const alpha = Math.min(1, timingTextTimer / 24);
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.textAlign = "center";
-    ctx.lineWidth = 7;
-    ctx.strokeStyle = "#14304b";
-
-    let fill = "#ffffff";
-    if (timingText === "PERFECT!") fill = "#2ed573";
-    if (timingText === "TOO EARLY" || timingText === "TOO LATE") fill = "#ff9f1a";
-
-    ctx.fillStyle = fill;
-    ctx.font = '900 38px "Baloo 2", sans-serif';
-    ctx.strokeText(timingText, canvas.width / 2, canvas.height * 0.30);
-    ctx.fillText(timingText, canvas.width / 2, canvas.height * 0.30);
-    ctx.restore();
-
-    timingTextTimer--;
+  if (power > 1.5 && upwardSwing > 0.25) {
+    return { label: "TRIPLE!", points: 45, confettiCount: 24, launchBoost: 1.02 };
   }
-
-  if (flashTimer > 0) {
-    ctx.fillStyle = `rgba(255,255,255,${flashTimer * 0.020})`;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    flashTimer--;
+  if (power > 1.08) {
+    return { label: "DOUBLE!", points: 28, confettiCount: 16, launchBoost: 0.88 };
   }
+  if (power > 0.66) {
+    return { label: "SINGLE!", points: 16, confettiCount: 10, launchBoost: 0.72 };
+  }
+  return { label: "FOUL TIP!", points: 8, confettiCount: 6, launchBoost: 0.54 };
 }
 
-// ---------- COUNTDOWN ----------
-function startCountdown() {
-  clearCountdownTimer();
-  countdownActive = true;
-  countdownValue = 5;
-  gameState = "countdown";
+function tryHit(batTip) {
+  if (!ball || !ball.active || ball.hit) return;
+  if (ball.x < canvas.width * 0.26) return;
+
+  const d = Math.hypot(ball.x - batTip.x, ball.y - batTip.y);
+  if (d > CONTACT_DISTANCE) return;
+  if (batVelocity.speed < parseFloat(swingThresholdSlider?.value || "420")) return;
+
+  ball.hit = true;
+
+  const timing = getTimingFeedback(batTip, ball);
+  let power = clamp(batVelocity.speed / 700, 0.35, 2.1);
+  power *= timing.powerBonus;
+
+  const upwardSwing = clamp((-batVelocity.y) / 700, -0.4, 1.0);
+  const lateral = batVelocity.x >= 0 ? 1 : -1;
+
+  const result = classifyHit(power, upwardSwing);
+
+  const baseVX = 9 + power * 8;
+  const baseVY = -(4 + Math.max(0, upwardSwing) * 7 + power * 2.2);
+
+  ball.vx =
+    lateral *
+    baseVX *
+    result.launchBoost *
+    timing.direction +
+    (Math.random() - 0.5) * 1.2;
+
+  ball.vy =
+    baseVY * result.launchBoost +
+    (Math.random() - 0.5) * 1.0;
+
+  ball.result = result.label;
+  ball.contactX = ball.x;
+  ball.estimatedDistanceFt = estimateDistanceFt(power, result.label);
+  currentDistanceFt = 0;
+
+  score += result.points;
+  hits++;
+  pitchesLeft--;
+
+  if (result.label === "HOME RUN!") {
+    hitText = getFunHitText(result.label, ball.estimatedDistanceFt);
+    hitTextTimer = Math.round((HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    timingText = timing.label;
+    timingTextTimer = Math.round((HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    distanceText = `${ball.estimatedDistanceFt} FT`;
+    distanceTextTimer = Math.round((HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    setCoachText("Coach: BOOM! That's your power swing!", 3000);
+    updateCrowdMood("home_run");
+  } else if (result.label === "TRIPLE!" || result.label === "DOUBLE!") {
+    hitText = getFunHitText(result.label, ball.estimatedDistanceFt);
+    hitTextTimer = Math.round((BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    timingText = timing.label;
+    timingTextTimer = Math.round((BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    distanceText = `${ball.estimatedDistanceFt} FT`;
+    distanceTextTimer = Math.round((BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    setCoachText("Coach: Nice barrel! Great contact.", 2600);
+    updateCrowdMood("big_hit");
+  } else {
+    hitText = getFunHitText(result.label, ball.estimatedDistanceFt);
+    hitTextTimer = Math.round((HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    timingText = timing.label;
+    timingTextTimer = Math.round((HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    distanceText = `${ball.estimatedDistanceFt} FT`;
+    distanceTextTimer = Math.round((HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    setCoachText("Coach: Nice swing. Keep that timing.", 2200);
+  }
+
+  spawnConfetti(ball.x, ball.y, result.confettiCount);
+  spawnStars(ball.x, ball.y, result.label);
+
+  if (result.label === "HOME RUN!") {
+    homeRuns++;
+    playHomeRunSound();
+    playHomeRunMusicBurst();
+    triggerHomeRunCelebration(ball.x, ball.y);
+    if (instructionChip) instructionChip.textContent = "HOME RUN! That one flew a long way!";
+  } else if (result.label === "TRIPLE!" || result.label === "DOUBLE!") {
+    playBigHitSound();
+    if (instructionChip) instructionChip.textContent = "Big hit! Watch how far it goes!";
+  } else {
+    playHitSound();
+    if (instructionChip) instructionChip.textContent = "Nice contact!";
+  }
+
+  bestDistanceFt = Math.max(bestDistanceFt, ball.estimatedDistanceFt);
+  updateHud();
+}
+
+function resolveMiss() {
+  misses++;
+  pitchesLeft--;
+  ball = null;
+  currentDistanceFt = 0;
+  updateHud();
+  playMissSound();
+  updateCrowdMood("miss");
+
+  const missFeedback = getMissFeedback();
+  missText = missFeedback;
+  missTextTimer = Math.round((MISS_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
 
   if (instructionChip) {
-    instructionChip.textContent = "Get set...";
+    instructionChip.textContent =
+      missFeedback === "TOO EARLY" || missFeedback === "TOO LATE"
+        ? "Try changing your timing on the next pitch."
+        : "Adjust your swing height on the next pitch.";
   }
 
-  hideControlsPanel();
-  fadeOutIntroMusic(1800);
+  if (missFeedback === "TOO EARLY") setCoachText("Coach: Start just a little later.", 2600);
+  if (missFeedback === "TOO LATE") setCoachText("Coach: Swing a little sooner.", 2600);
+  if (missFeedback === "SWING TOO HIGH") setCoachText("Coach: Bring the bat down into the zone.", 2600);
+  if (missFeedback === "SWING TOO LOW") setCoachText("Coach: Lift the bat a little higher.", 2600);
 
-  const tick = () => {
-    if (!countdownActive) return;
-
-    if (countdownValue > 0) {
-      playCountdownBeep(countdownValue);
-      if (instructionChip) {
-        instructionChip.textContent = `Starting in ${countdownValue}...`;
-      }
-      countdownValue--;
-      countdownTimer = setTimeout(tick, 1000);
-    } else {
-      playGoSound();
-      if (instructionChip) {
-        instructionChip.textContent = "Swing!";
-      }
-      countdownActive = false;
-      gameState = "playing";
-      createPitch();
-    }
-  };
-
-  tick();
-}
-
-// ---------- SIDE SELECT ----------
-function updateSideButtons() {
-  if (battingSide === "right") {
-    if (rightHandBtn) rightHandBtn.classList.add("active");
-    if (leftHandBtn) leftHandBtn.classList.remove("active");
+  if (pitchesLeft <= 0) {
+    pitchTimer = setTimeout(() => {
+      endRoundToSummary();
+    }, MISS_FEEDBACK_MS + FEEDBACK_FADE_MS + 1200);
   } else {
-    if (leftHandBtn) leftHandBtn.classList.add("active");
-    if (rightHandBtn) rightHandBtn.classList.remove("active");
+    pitchTimer = setTimeout(() => {
+      scheduleNextPitch();
+    }, MISS_FEEDBACK_MS + FEEDBACK_FADE_MS);
   }
 }
 
-if (rightHandBtn) {
-  rightHandBtn.onclick = () => {
-    battingSide = "right";
-    prevBatPoint = null;
-    updateSideButtons();
-  };
+function resolveFinishedHit() {
+  const resultLabel = ball?.result || "";
+  const finalDistance = Math.max(currentDistanceFt, ball?.estimatedDistanceFt || 0);
+
+  bestDistanceFt = Math.max(bestDistanceFt, finalDistance);
+  updateHud();
+
+  ball = null;
+  currentDistanceFt = 0;
+
+  if (instructionChip) {
+    instructionChip.textContent = "Nice! Get ready for the next pitch.";
+  }
+
+  if (pitchesLeft <= 0) {
+    const endDelay =
+      resultLabel === "HOME RUN!"
+        ? HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS + 1800
+        : resultLabel === "TRIPLE!" || resultLabel === "DOUBLE!"
+          ? BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS + 1200
+          : HIT_FEEDBACK_MS + FEEDBACK_FADE_MS + 900;
+
+    pitchTimer = setTimeout(() => {
+      endRoundToSummary();
+    }, endDelay);
+    return;
+  }
+
+  if (resultLabel === "HOME RUN!") {
+    schedulePitchAfterFeedback(HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS, 2000);
+  } else if (resultLabel === "TRIPLE!" || resultLabel === "DOUBLE!") {
+    schedulePitchAfterFeedback(BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS);
+  } else {
+    schedulePitchAfterFeedback(HIT_FEEDBACK_MS + FEEDBACK_FADE_MS);
+  }
 }
 
-if (leftHandBtn) {
-  leftHandBtn.onclick = () => {
-    battingSide = "left";
-    prevBatPoint = null;
-    updateSideButtons();
-  };
+function spawnHomeRunTrail() {
+  if (!ball || ball.result !== "HOME RUN!") return;
+
+  homerTrailParticles.push({
+    x: ball.x,
+    y: ball.y,
+    vx: (Math.random() - 0.5) * 1.5,
+    vy: (Math.random() - 0.5) * 1.5,
+    life: 18 + Math.random() * 8,
+    size: 4 + Math.random() * 5,
+    color: ["#ffd54f", "#ffffff", "#42a5f5", "#ff7043"][Math.floor(Math.random() * 4)]
+  });
+}
+
+function updateBall() {
+  if (!ball || !ball.active) return;
+  if (gameState !== "playing") return;
+
+  if (!ball.hit) {
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    ball.trail.push({ x: ball.x, y: ball.y, a: 0.16, s: ball.size });
+    if (ball.trail.length > 7) ball.trail.shift();
+
+    if (ball.x < canvas.width * 0.22) {
+      resolveMiss();
+    }
+  } else {
+    ball.vy += GRAVITY;
+    ball.vx *= 0.992;
+    ball.vy *= 0.996;
+
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    ball.trail.push({ x: ball.x, y: ball.y, a: 0.24, s: ball.size });
+    if (ball.trail.length > 16) ball.trail.shift();
+
+    if (ball.result === "HOME RUN!") {
+      spawnHomeRunTrail();
+      spawnHomeRunTrail();
+    }
+
+    if (ball.y > canvas.height + 60 || ball.x < -90 || ball.x > canvas.width + 90) {
+      resolveFinishedHit();
+    }
+  }
+}
+
+function updateDistanceDuringFlight() {
+  if (!ball || !ball.hit) return;
+
+  const startX = ball.contactX ?? ball.x;
+  const travelPx = Math.abs(ball.x - startX) + Math.abs(ball.y - canvas.height * 0.62) * 0.15;
+  currentDistanceFt = Math.min(ball.estimatedDistanceFt || 0, Math.round(travelPx * 0.30));
+}
+
+function drawBall() {
+  if (!ball || !ball.active) return;
+
+  for (let i = 0; i < ball.trail.length; i++) {
+    const p = ball.trail[i];
+    const alpha = ((i + 1) / ball.trail.length) * p.a;
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, Math.max(4, (p.s || BALL_RADIUS) * 0.58), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.save();
+  ctx.shadowBlur = ball.result === "HOME RUN!" ? 24 : 16;
+  ctx.shadowColor = ball.result === "HOME RUN!" ? "#ffd54f" : "#ffffff";
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.size || BALL_RADIUS, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "#cfd8dc";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, (ball.size || BALL_RADIUS) - 2, 0.4, 2.4);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, (ball.size || BALL_RADIUS) - 2, 3.6, 5.7);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ---------- MINIMAP ----------
+function drawMiniMap() {
+  if (!miniMapCanvas || !miniCtx) return;
+
+  miniCtx.clearRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
+
+  miniCtx.fillStyle = "#0b2343";
+  miniCtx.fillRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
+
+  miniCtx.strokeStyle = "rgba(255,255,255,0.18)";
+  miniCtx.lineWidth = 2;
+  miniCtx.strokeRect(1, 1, miniMapCanvas.width - 2, miniMapCanvas.height - 2);
+
+  miniCtx.fillStyle = "rgba(255,255,255,0.06)";
+  miniCtx.fillRect(18, 55, miniMapCanvas.width - 36, 24);
+
+  miniCtx.strokeStyle = "rgba(255,255,255,0.30)";
+  miniCtx.lineWidth = 4;
+  miniCtx.beginPath();
+  miniCtx.moveTo(miniMapCanvas.width - 24, 67);
+  miniCtx.lineTo(34, 67);
+  miniCtx.stroke();
+
+  miniCtx.fillStyle = "#ffd54f";
+  miniCtx.beginPath();
+  miniCtx.arc(miniMapCanvas.width - 24, 67, 7, 0, Math.PI * 2);
+  miniCtx.fill();
+
+  if (ball) {
+    const bx = clamp((ball.x / canvas.width) * miniMapCanvas.width, 10, miniMapCanvas.width - 10);
+    const by = clamp((ball.y / canvas.height) * miniMapCanvas.height, 18, miniMapCanvas.height - 18);
+
+    miniCtx.fillStyle = "#ffffff";
+    miniCtx.beginPath();
+    miniCtx.arc(bx, by, 7, 0, Math.PI * 2);
+    miniCtx.fill();
+  }
+
+  miniCtx.fillStyle = "#dbeaff";
+  miniCtx.font = '900 12px "Nunito", sans-serif';
+  miniCtx.textAlign = "left";
+  miniCtx.fillText("Right-to-left", 12, 18);
 }
 
 // ---------- MAIN LOOP ----------
@@ -1446,6 +1525,8 @@ async function loop() {
     }
   }
 
+  drawStrikeZone();
+  drawAccuracyMeter();
   drawBatTrail();
 
   if (gameState === "playing") {
@@ -1474,6 +1555,8 @@ async function loop() {
     }
   }
 
+  drawCoachOverlay();
+  drawCrowdOverlay();
   tickBatTrail();
 
   if (gameState === "start") {
@@ -1498,6 +1581,49 @@ async function loop() {
 
   ctx.restore();
   animationId = requestAnimationFrame(loop);
+}
+
+// ---------- COACH / CROWD OVERLAYS ----------
+function drawCoachOverlay() {
+  if (coachTextTimer <= 0) return;
+
+  const alpha = Math.min(1, coachTextTimer / 20);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = "rgba(10,18,38,0.78)";
+  ctx.beginPath();
+  ctx.roundRect(canvas.width * 0.60, canvas.height * 0.12, 300, 56, 18);
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 18px "Nunito", sans-serif';
+  ctx.textAlign = "left";
+  ctx.fillText(coachText, canvas.width * 0.60 + 18, canvas.height * 0.12 + 34);
+  ctx.restore();
+
+  coachTextTimer--;
+}
+
+function drawCrowdOverlay() {
+  if (crowdTextTimer <= 0) return;
+
+  const alpha = Math.min(1, crowdTextTimer / 16);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = "center";
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = "#14304b";
+  ctx.fillStyle = crowdMood === "boo" ? "#ff9f1a" : "#ffd43b";
+  ctx.font = '900 28px "Baloo 2", sans-serif';
+  ctx.strokeText(crowdText, canvas.width * 0.18, canvas.height * 0.20);
+  ctx.fillText(crowdText, canvas.width * 0.18, canvas.height * 0.20);
+  ctx.restore();
+
+  crowdTextTimer--;
 }
 
 // ---------- BUTTONS ----------
@@ -1590,6 +1716,102 @@ function resetGame() {
   }
 }
 
+// ---------- CAMERA / MODEL ----------
+async function setupCamera() {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: "user",
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    },
+    audio: false
+  });
+
+  video.srcObject = stream;
+
+  await new Promise(resolve => {
+    video.onloadedmetadata = () => resolve();
+  });
+
+  await video.play();
+  resizeCanvas();
+}
+
+async function loadModel() {
+  await tf.ready();
+  detector = await poseDetection.createDetector(
+    poseDetection.SupportedModels.MoveNet,
+    { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
+  );
+}
+
+// ---------- RESET ROUND ----------
+function resetRound() {
+  clearPitchTimer();
+  clearCountdownTimer();
+  clearSummaryTimer();
+
+  score = 0;
+  hits = 0;
+  misses = 0;
+  homeRuns = 0;
+  bestDistanceFt = 0;
+  currentDistanceFt = 0;
+  pitchesLeft = roundPitches;
+
+  prevBatPoint = null;
+  batVelocity = { x: 0, y: 0, speed: 0 };
+  lastBatTip = null;
+  ball = null;
+
+  hitText = "";
+  hitTextTimer = 0;
+  timingText = "";
+  timingTextTimer = 0;
+  distanceText = "";
+  distanceTextTimer = 0;
+  missText = "";
+  missTextTimer = 0;
+
+  coachText = "";
+  coachTextTimer = 0;
+  crowdText = "";
+  crowdTextTimer = 0;
+  crowdMood = "quiet";
+
+  accuracyMarkerTimer = 0;
+  lastTimingOffset = 0.5;
+  lastTimingRating = "";
+
+  flashTimer = 0;
+
+  confetti = [];
+  floatingStars = [];
+  homerBursts = [];
+  homerTrailParticles = [];
+  batTrail = [];
+
+  screenShakeTimer = 0;
+  screenShakeAmount = 0;
+
+  countdownActive = false;
+  countdownValue = 5;
+  roundSummary = null;
+  showRoundComplete = false;
+  roundCompleteTimer = 0;
+  strikeZone = null;
+
+  CONTACT_DISTANCE = DIFFICULTIES[difficulty].contactDistance;
+
+  updateHud();
+
+  if (instructionChip) {
+    instructionChip.textContent = "Strong swings can send the ball farther. Timing matters too.";
+  }
+
+  showControlsPanel();
+}
+
 // ---------- INIT ----------
 if (startBtn) {
   startBtn.onclick = startOrResumeGame;
@@ -1623,6 +1845,22 @@ if (muteBtn) {
   };
 }
 
+if (rightHandBtn) {
+  rightHandBtn.onclick = () => {
+    battingSide = "right";
+    prevBatPoint = null;
+    updateSideButtons();
+  };
+}
+
+if (leftHandBtn) {
+  leftHandBtn.onclick = () => {
+    battingSide = "left";
+    prevBatPoint = null;
+    updateSideButtons();
+  };
+}
+
 window.addEventListener("keydown", (e) => {
   if (e.code === "Space") {
     e.preventDefault();
@@ -1634,6 +1872,16 @@ window.addEventListener("keydown", (e) => {
     }
   }
 });
+
+function updateSideButtons() {
+  if (battingSide === "right") {
+    if (rightHandBtn) rightHandBtn.classList.add("active");
+    if (leftHandBtn) leftHandBtn.classList.remove("active");
+  } else {
+    if (leftHandBtn) leftHandBtn.classList.add("active");
+    if (rightHandBtn) rightHandBtn.classList.remove("active");
+  }
+}
 
 updateSideButtons();
 updateHud();
