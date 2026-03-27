@@ -121,7 +121,7 @@ const BAT_LENGTH = 132;
 const PLAYER_SCALE = 0.65;
 const PLAYER_TARGET_X = 0.21;
 const PLAYER_FLOOR_Y = 0.885;
-const BALL_LANE_Y = 0.64;
+const BALL_LANE_Y = 0;
 
 const HIT_FEEDBACK_MS = 3800;
 const BIG_HIT_FEEDBACK_MS = 4400;
