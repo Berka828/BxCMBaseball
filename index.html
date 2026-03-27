@@ -15,11 +15,23 @@
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
-  <div class="appShell">
+  <div class="appShell preGame" id="appShell">
     <video id="video" playsinline muted autoplay></video>
     <canvas id="canvas"></canvas>
 
-    <div class="topRow">
+    <div class="splashScreen" id="splashScreen">
+      <div class="splashCard">
+        <img id="splashLogo" src="./bxcm-logo.png" alt="Bronx Children's Museum logo">
+        <h1>BxCM Jr. Sluggers Academy</h1>
+        <p>Swing big. Make contact. Chase the high score.</p>
+        <div class="splashButtons">
+          <button id="splashStartBtn" class="ctaBtn primaryBtn" type="button">Start Game</button>
+        </div>
+        <div class="splashHint">Choose your batting side once the game opens.</div>
+      </div>
+    </div>
+
+    <div class="topRow chrome">
       <div class="overlay logoPanel">
         <img id="bxcmLogo" src="./bxcm-logo.png" alt="Bronx Children's Museum logo">
       </div>
@@ -41,7 +53,7 @@
       </div>
     </div>
 
-    <div class="leftStats">
+    <div class="leftStats chrome">
       <div class="overlay statBox">
         <span>HITS</span>
         <strong id="hitsEl">0</strong>
@@ -58,15 +70,15 @@
       </div>
     </div>
 
-    <div class="overlay miniMapWrap">
+    <div class="overlay miniMapWrap chrome">
       <canvas id="miniMapCanvas" width="220" height="130"></canvas>
     </div>
 
-    <div class="overlay instructionChip" id="instructionChip">
+    <div class="overlay instructionChip chrome" id="instructionChip">
       Press Start to begin.
     </div>
 
-    <div class="overlay rightPanel" id="controlsPanel">
+    <div class="overlay rightPanel chrome" id="controlsPanel">
       <h2>Controls</h2>
 
       <button id="startBtn" class="ctaBtn primaryBtn" type="button">Start Game</button>
