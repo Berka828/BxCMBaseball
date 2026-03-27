@@ -120,7 +120,7 @@ const BAT_LENGTH = 132;
 
 const SKELETON_SCALE = 0.68;
 const SKELETON_OFFSET_Y = 360;
-const SKELETON_OFFSET_X = -300;
+const SKELETON_OFFSET_X = -30;
 
 const TIPS = [
   "Strong swings can send the ball farther.",
