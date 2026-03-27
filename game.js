@@ -30,23 +30,21 @@ const pitchSpeedVal = document.getElementById("pitchSpeedVal");
 const swingThresholdVal = document.getElementById("swingThresholdVal");
 const pitchDelayVal = document.getElementById("pitchDelayVal");
 
+// ---------- defaults ----------
 pitchDelaySlider.value = "3";
 pitchDelayVal.textContent = "3s";
-
 pitchSpeedSlider.oninput = () => (pitchSpeedVal.textContent = pitchSpeedSlider.value);
 swingThresholdSlider.oninput = () => (swingThresholdVal.textContent = swingThresholdSlider.value);
 pitchDelaySlider.oninput = () => (pitchDelayVal.textContent = `${pitchDelaySlider.value}s`);
 
+// ---------- assets ----------
 const backgroundImg = new Image();
 let backgroundReady = false;
-backgroundImg.onload = () => {
-  backgroundReady = true;
-};
-backgroundImg.onerror = () => {
-  backgroundReady = false;
-};
-backgroundImg.src = "./stadium-bg.png";
+backgroundImg.onload = () => { backgroundReady = true; };
+backgroundImg.onerror = () => { backgroundReady = false; };
+backgroundImg.src = "stadium-bg.png";
 
+// ---------- app state ----------
 let detector = null;
 let cameraReady = false;
 let modelReady = false;
@@ -54,7 +52,7 @@ let poseLoopStarted = false;
 let renderLoopStarted = false;
 let latestPose = null;
 
-let gameState = "start";
+let gameState = "start"; // start | countdown | playing | paused | end
 let battingSide = "right";
 
 let score = 0;
@@ -91,6 +89,7 @@ const SKELETON_SCALE = 0.68;
 const SKELETON_OFFSET_Y = 100;
 const SKELETON_OFFSET_X = 0;
 
+// ---------- audio ----------
 let audioCtx = null;
 let soundEnabled = true;
 
@@ -107,21 +106,18 @@ function initAudio() {
 
 function tone(freq, duration, type = "sine", gainValue = 0.12, startTime = 0) {
   if (!soundEnabled || !audioCtx) return;
-
   const now = audioCtx.currentTime + startTime;
   const osc = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
 
   osc.type = type;
   osc.frequency.setValueAtTime(freq, now);
-
   gain.gain.setValueAtTime(0.0001, now);
   gain.gain.exponentialRampToValueAtTime(gainValue, now + 0.01);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
   osc.connect(gain);
   gain.connect(audioCtx.destination);
-
   osc.start(now);
   osc.stop(now + duration + 0.03);
 }
@@ -131,44 +127,38 @@ function playStartSound() {
   tone(659.25, 0.12, "triangle", 0.14, 0.08);
   tone(783.99, 0.16, "triangle", 0.14, 0.16);
 }
-
 function playPitchSound() {
   tone(240, 0.08, "sawtooth", 0.09, 0);
   tone(180, 0.08, "sawtooth", 0.07, 0.05);
 }
-
 function playMissSound() {
   tone(220, 0.08, "square", 0.08, 0);
   tone(170, 0.10, "square", 0.06, 0.06);
 }
-
 function playHitSound() {
   tone(180, 0.04, "square", 0.14, 0);
   tone(320, 0.08, "triangle", 0.10, 0.02);
 }
-
 function playBigHitSound() {
   tone(220, 0.04, "square", 0.15, 0);
   tone(440, 0.10, "triangle", 0.12, 0.03);
   tone(660, 0.12, "triangle", 0.10, 0.08);
 }
-
 function playHomeRunSound() {
   tone(392, 0.10, "triangle", 0.14, 0);
   tone(523.25, 0.10, "triangle", 0.14, 0.08);
   tone(659.25, 0.12, "triangle", 0.14, 0.16);
   tone(783.99, 0.18, "triangle", 0.14, 0.26);
 }
-
 function playCountdownBeep(n) {
   tone(n > 1 ? 660 : 880, 0.10, "triangle", 0.11, 0);
 }
-
 function playGoSound() {
   tone(880, 0.08, "triangle", 0.12, 0);
   tone(1174.66, 0.12, "triangle", 0.12, 0.08);
 }
 
+// ---------- helpers ----------
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
 }
@@ -266,6 +256,7 @@ function startEndSequence() {
   instructionChip.textContent = "Round over. Review your results.";
 }
 
+// ---------- camera / pose ----------
 function getKeypoint(pose, name, minScore = 0.25) {
   return pose?.keypoints?.find(k => k.name === name && (k.score ?? 0) > minScore) || null;
 }
@@ -280,13 +271,10 @@ async function ensureTrackingReady() {
       },
       audio: false
     });
-
     video.srcObject = stream;
-
     await new Promise(resolve => {
       video.onloadedmetadata = () => resolve();
     });
-
     await video.play();
     cameraReady = true;
     resizeCanvas();
@@ -313,7 +301,7 @@ function startPoseLoop() {
         const poses = await detector.estimatePoses(video, { flipHorizontal: true });
         latestPose = poses[0] || null;
       } catch (e) {
-        // keep prior pose
+        // keep previous pose
       }
     }
     requestAnimationFrame(loop);
@@ -322,6 +310,7 @@ function startPoseLoop() {
   requestAnimationFrame(loop);
 }
 
+// ---------- background ----------
 function drawFallbackBackground() {
   const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
   grad.addColorStop(0, "#203a5c");
@@ -362,6 +351,7 @@ function drawBackground() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
+// ---------- skeleton / bat ----------
 function scalePoint(p, center, scale) {
   if (!p) return null;
   return {
@@ -517,6 +507,7 @@ function drawBatFromSide(wrist, elbow) {
 
   ctx.save();
   ctx.lineCap = "round";
+
   ctx.strokeStyle = "#5d4037";
   ctx.lineWidth = 14;
   ctx.beginPath();
@@ -532,6 +523,7 @@ function drawBatFromSide(wrist, elbow) {
   ctx.moveTo(wx, wy);
   ctx.lineTo(tipX, tipY);
   ctx.stroke();
+
   ctx.restore();
 
   return { x: tipX, y: tipY };
@@ -559,6 +551,7 @@ function updateBatVelocity(point) {
   prevBatPoint = { ...point, t: now };
 }
 
+// ---------- guide ----------
 function drawSwingGuide() {
   if (!latestBatTip) return;
   if (!["start", "countdown"].includes(gameState)) return;
@@ -578,6 +571,7 @@ function drawSwingGuide() {
   ctx.moveTo(lineStartX, latestBatTip.y);
   ctx.lineTo(lineEndX, latestBatTip.y - 16);
   ctx.stroke();
+
   ctx.restore();
 
   ctx.save();
@@ -588,6 +582,7 @@ function drawSwingGuide() {
   ctx.restore();
 }
 
+// ---------- ball ----------
 function createPitch() {
   if (pitchesLeft <= 0) return;
   if (gameState !== "playing") return;
@@ -755,6 +750,7 @@ function drawBall() {
   ctx.restore();
 }
 
+// ---------- minimap ----------
 function drawMiniMap() {
   miniCtx.clearRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
 
@@ -793,6 +789,7 @@ function drawMiniMap() {
   }
 }
 
+// ---------- overlays ----------
 function drawPauseOverlay() {
   ctx.fillStyle = "rgba(0,0,0,0.26)";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -906,6 +903,7 @@ function drawHitOverlay() {
   }
 }
 
+// ---------- game flow ----------
 function startCountdown() {
   clearCountdownTimer();
   countdownActive = true;
@@ -998,6 +996,7 @@ function resetGame() {
   showControlsPanel();
 }
 
+// ---------- render ----------
 function renderGame() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -1062,6 +1061,7 @@ function startRenderLoop() {
   requestAnimationFrame(loop);
 }
 
+// ---------- UI ----------
 startBtn.onclick = startOrResumeGame;
 pauseBtn.onclick = togglePause;
 resetBtn.onclick = resetGame;
@@ -1102,6 +1102,7 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+// ---------- init ----------
 rightHandBtn.classList.add("active");
 leftHandBtn.classList.remove("active");
 updateHud();
