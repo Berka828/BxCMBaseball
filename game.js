@@ -1,933 +1,2462 @@
-window.addEventListener("DOMContentLoaded", () => {
-  const splash = document.getElementById("splash");
-  const startBtn = document.getElementById("startBtn");
-  const canvas = document.getElementById("gameCanvas");
-  const ctx = canvas.getContext("2d");
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 
-  if (!splash || !startBtn || !canvas) {
-    console.error("Missing required elements: #splash, #startBtn, or #gameCanvas");
+const miniMapCanvas = document.getElementById("miniMapCanvas");
+const miniCtx = miniMapCanvas ? miniMapCanvas.getContext("2d") : null;
+
+const startBtn = document.getElementById("startBtn");
+const pauseBtn = document.getElementById("pauseBtn");
+const resetBtn = document.getElementById("resetBtn");
+const muteBtn = document.getElementById("muteBtn");
+const rightHandBtn = document.getElementById("rightHandBtn");
+const leftHandBtn = document.getElementById("leftHandBtn");
+
+const easyBtn = document.getElementById("easyBtn");
+const mediumBtn = document.getElementById("mediumBtn");
+const hardBtn = document.getElementById("hardBtn");
+
+const splashScreen = document.getElementById("splashScreen");
+const splashStartBtn = document.getElementById("splashStartBtn");
+
+const scoreEl = document.getElementById("scoreEl");
+const pitchesEl = document.getElementById("pitchesEl");
+const hitsEl = document.getElementById("hitsEl");
+const missesEl = document.getElementById("missesEl");
+const veloEl = document.getElementById("veloEl");
+const instructionChip = document.getElementById("instructionChip");
+
+const homeRunsEl = document.getElementById("homeRunsEl");
+const bestHitEl = document.getElementById("bestHitEl");
+
+const pitchSpeedSlider = document.getElementById("pitchSpeed");
+const swingThresholdSlider = document.getElementById("swingThreshold");
+const pitchDelaySlider = document.getElementById("pitchDelay");
+
+const pitchSpeedVal = document.getElementById("pitchSpeedVal");
+const swingThresholdVal = document.getElementById("swingThresholdVal");
+const pitchDelayVal = document.getElementById("pitchDelayVal");
+
+const controlDock = document.querySelector(".controlDock");
+
+// ---------- DIFFICULTY ----------
+const DIFFICULTIES = {
+  easy: {
+    pitchSpeed: 10,
+    swingThreshold: 320,
+    pitchDelay: 3.8,
+    ballScale: 1.35,
+    contactDistance: 84
+  },
+  medium: {
+    pitchSpeed: 12,
+    swingThreshold: 420,
+    pitchDelay: 3.5,
+    ballScale: 1.0,
+    contactDistance: 68
+  },
+  hard: {
+    pitchSpeed: 14,
+    swingThreshold: 520,
+    pitchDelay: 3.0,
+    ballScale: 0.78,
+    contactDistance: 56
+  }
+};
+
+let difficulty = "medium";
+
+function setDifficulty(level) {
+  difficulty = level;
+  const d = DIFFICULTIES[level];
+
+  if (pitchSpeedSlider) pitchSpeedSlider.value = String(d.pitchSpeed);
+  if (swingThresholdSlider) swingThresholdSlider.value = String(d.swingThreshold);
+  if (pitchDelaySlider) pitchDelaySlider.value = String(d.pitchDelay);
+
+  if (pitchSpeedVal) pitchSpeedVal.textContent = pitchSpeedSlider.value;
+  if (swingThresholdVal) swingThresholdVal.textContent = swingThresholdSlider.value;
+  if (pitchDelayVal) pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
+
+  if (easyBtn) easyBtn.classList.toggle("active", level === "easy");
+  if (mediumBtn) mediumBtn.classList.toggle("active", level === "medium");
+  if (hardBtn) hardBtn.classList.toggle("active", level === "hard");
+}
+
+if (easyBtn) easyBtn.onclick = () => setDifficulty("easy");
+if (mediumBtn) mediumBtn.onclick = () => setDifficulty("medium");
+if (hardBtn) hardBtn.onclick = () => setDifficulty("hard");
+
+setDifficulty("medium");
+
+// ---------- SAFE SLIDER WIRING ----------
+if (pitchSpeedSlider && pitchSpeedVal) {
+  pitchSpeedSlider.oninput = () => {
+    pitchSpeedVal.textContent = pitchSpeedSlider.value;
+  };
+}
+
+if (swingThresholdSlider && swingThresholdVal) {
+  swingThresholdSlider.oninput = () => {
+    swingThresholdVal.textContent = swingThresholdSlider.value;
+  };
+}
+
+if (pitchDelaySlider && pitchDelayVal) {
+  pitchDelaySlider.oninput = () => {
+    pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
+  };
+}
+
+// ---------- GAME STATE ----------
+let detector = null;
+let animationId = null;
+let gameState = "start"; // start | countdown | playing | paused | round_complete | summary
+let battingSide = "right";
+
+let score = 0;
+let hits = 0;
+let misses = 0;
+let homeRuns = 0;
+let pitchesLeft = 10;
+const roundPitches = 10;
+
+let bestDistanceFt = 0;
+let currentDistanceFt = 0;
+
+let prevBatPoint = null;
+let batVelocity = { x: 0, y: 0, speed: 0 };
+let lastBatTip = null;
+
+let ball = null;
+let hitText = "";
+let hitTextTimer = 0;
+let flashTimer = 0;
+let timingText = "";
+let timingTextTimer = 0;
+let distanceText = "";
+let distanceTextTimer = 0;
+let missText = "";
+let missTextTimer = 0;
+
+let confetti = [];
+let floatingStars = [];
+let homerBursts = [];
+let homerTrailParticles = [];
+let batTrail = [];
+
+let pitchTimer = null;
+let countdownTimer = null;
+let countdownActive = false;
+let countdownValue = 5;
+
+let summaryTimer = null;
+let roundSummary = null;
+let showRoundComplete = false;
+let roundCompleteTimer = 0;
+
+let screenShakeTimer = 0;
+let screenShakeAmount = 0;
+
+let lastTimingOffset = 0.5;
+let lastTimingRating = "";
+let accuracyMarkerTimer = 0;
+
+let coachText = "";
+let coachTextTimer = 0;
+let crowdText = "";
+let crowdTextTimer = 0;
+let crowdMood = "quiet";
+
+let swingPowerDisplay = 0;
+let swingPowerPeak = 0;
+
+const BALL_RADIUS = 14;
+const GRAVITY = 0.44;
+let CONTACT_DISTANCE = DIFFICULTIES[difficulty].contactDistance;
+const BAT_LENGTH = 132;
+
+const SKELETON_SCALE = 0.68;
+const SKELETON_OFFSET_Y = 360;
+const SKELETON_OFFSET_X = -300;
+
+const TIPS = [
+  "Strong swings can send the ball farther.",
+  "A bat is a lever. Timing helps power.",
+  "A ball can travel farther when your swing is smooth and strong.",
+  "Big upward swings can create longer hits.",
+  "Speed plus timing can make a rocket hit.",
+  "Different angles can change how far the ball flies."
+];
+
+let tipIndex = 0;
+
+// ---------- TIMING SETTINGS ----------
+const HIT_FEEDBACK_MS = 3800;
+const BIG_HIT_FEEDBACK_MS = 4400;
+const HOME_RUN_FEEDBACK_MS = 5200;
+const MISS_FEEDBACK_MS = 3400;
+const FEEDBACK_FADE_MS = 800;
+const ROUND_COMPLETE_MS = 2200;
+
+// ---------- BACKGROUNDS ----------
+const stadiumBg = new Image();
+let stadiumBgLoaded = false;
+stadiumBg.onload = () => { stadiumBgLoaded = true; };
+stadiumBg.onerror = () => { console.error("Background image failed to load."); };
+stadiumBg.src = "./stadium-bg.png";
+
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v));
+}
+
+function drawImageCover(img, alpha = 1) {
+  if (!img || !img.width || !img.height) return;
+
+  const imgRatio = img.width / img.height;
+  const canvasRatio = canvas.width / canvas.height;
+
+  let drawWidth;
+  let drawHeight;
+
+  if (canvasRatio > imgRatio) {
+    drawWidth = canvas.width;
+    drawHeight = canvas.width / imgRatio;
+  } else {
+    drawHeight = canvas.height;
+    drawWidth = canvas.height * imgRatio;
+  }
+
+  const offsetX = (canvas.width - drawWidth) / 2;
+  const offsetY = (canvas.height - drawHeight) / 2;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+  ctx.restore();
+}
+
+function drawBattingCageBackground(alpha = 1) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  grad.addColorStop(0, "#20385f");
+  grad.addColorStop(0.45, "#1a2f4f");
+  grad.addColorStop(1, "#101d31");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const laneLeft = canvas.width * 0.08;
+  const laneRight = canvas.width * 0.92;
+  const laneTop = canvas.height * 0.18;
+  const laneBottom = canvas.height * 0.88;
+
+  const laneGrad = ctx.createLinearGradient(0, laneTop, 0, laneBottom);
+  laneGrad.addColorStop(0, "rgba(255,255,255,0.03)");
+  laneGrad.addColorStop(1, "rgba(0,0,0,0.18)");
+  ctx.fillStyle = laneGrad;
+  ctx.fillRect(laneLeft, laneTop, laneRight - laneLeft, laneBottom - laneTop);
+
+  ctx.strokeStyle = "rgba(255,255,255,0.10)";
+  ctx.lineWidth = 2;
+
+  for (let i = 0; i < 12; i++) {
+    const x1 = laneLeft + i * ((laneRight - laneLeft) / 12);
+    const x2 = laneLeft + i * ((laneRight - laneLeft) / 12) * 0.65 + canvas.width * 0.12;
+    ctx.beginPath();
+    ctx.moveTo(x1, laneTop);
+    ctx.lineTo(x2, laneBottom);
+    ctx.stroke();
+  }
+
+  for (let i = 0; i < 10; i++) {
+    const y = laneTop + i * ((laneBottom - laneTop) / 10);
+    ctx.beginPath();
+    ctx.moveTo(laneLeft, y);
+    ctx.lineTo(laneRight, y);
+    ctx.stroke();
+  }
+
+  const centerX = canvas.width * 0.54;
+  ctx.strokeStyle = "rgba(255,212,59,0.30)";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(canvas.width * 0.84, canvas.height * 0.63);
+  ctx.lineTo(centerX - 20, canvas.height * 0.63);
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(255,255,255,0.08)";
+  ctx.fillRect(canvas.width * 0.10, canvas.height * 0.70, canvas.width * 0.26, canvas.height * 0.12);
+
+  ctx.strokeStyle = "rgba(255,255,255,0.22)";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(canvas.width * 0.10, canvas.height * 0.70, canvas.width * 0.26, canvas.height * 0.12);
+
+  for (let i = 0; i < 5; i++) {
+    const lx = canvas.width * (0.14 + i * 0.18);
+    ctx.fillStyle = "rgba(255,235,160,0.14)";
+    ctx.beginPath();
+    ctx.arc(lx, canvas.height * 0.08, 14, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.beginPath();
+    ctx.arc(lx, canvas.height * 0.08, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "rgba(0,0,0,0.20)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
+}
+
+function drawBackground() {
+  if (stadiumBgLoaded) {
+    drawImageCover(stadiumBg, 1);
+  } else {
+    ctx.fillStyle = "#1e2f4d";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  ctx.fillStyle = "rgba(0, 0, 0, 0.52)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const shouldBlendCage =
+    (ball && ball.result === "HOME RUN!" && ball.hit) ||
+    flashTimer > 8 ||
+    (homeRuns > 0 && hitText.includes("HOME RUN!"));
+
+  if (shouldBlendCage) {
+    drawBattingCageBackground(0.62);
+  }
+}
+
+// ---------- AUDIO ----------
+let audioCtx = null;
+let soundEnabled = true;
+
+let introMusic = null;
+let introMusicStarted = false;
+let introFadeTimer = null;
+
+let homeRunMusic = null;
+let homeRunMusicTimer = null;
+
+// ambient crowd system
+let ambientMasterGain = null;
+let ambientRumbleOsc = null;
+let ambientRumbleGain = null;
+let ambientCrowdInterval = null;
+let ambientRunning = false;
+
+function initAudio() {
+  if (!audioCtx) {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    audioCtx = new AudioCtx();
+  }
+
+  if (audioCtx.state === "suspended") {
+    audioCtx.resume().catch(() => {});
+  }
+
+  if (!ambientMasterGain && audioCtx) {
+    ambientMasterGain = audioCtx.createGain();
+    ambientMasterGain.gain.value = 0.0;
+    ambientMasterGain.connect(audioCtx.destination);
+  }
+}
+
+function tone(freq, duration, type = "sine", gainValue = 0.12, startTime = 0) {
+  if (!soundEnabled || !audioCtx) return;
+
+  const now = audioCtx.currentTime + startTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, now);
+
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(gainValue, now + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc.start(now);
+  osc.stop(now + duration + 0.03);
+}
+
+function playStartSound() {
+  tone(523.25, 0.10, "triangle", 0.14, 0);
+  tone(659.25, 0.12, "triangle", 0.14, 0.08);
+  tone(783.99, 0.16, "triangle", 0.14, 0.16);
+}
+
+function playPitchSound() {
+  tone(240, 0.08, "sawtooth", 0.09, 0);
+  tone(180, 0.08, "sawtooth", 0.07, 0.05);
+}
+
+function playMissSound() {
+  tone(220, 0.08, "square", 0.08, 0);
+  tone(170, 0.10, "square", 0.06, 0.06);
+}
+
+function playHitSound() {
+  tone(180, 0.03, "square", 0.14, 0);
+  tone(320, 0.08, "triangle", 0.10, 0.015);
+}
+
+function playBigHitSound() {
+  tone(220, 0.04, "square", 0.15, 0);
+  tone(440, 0.08, "triangle", 0.12, 0.03);
+  tone(660, 0.12, "triangle", 0.10, 0.08);
+}
+
+function playHomeRunSound() {
+  tone(392, 0.10, "triangle", 0.14, 0);
+  tone(523.25, 0.10, "triangle", 0.14, 0.08);
+  tone(659.25, 0.12, "triangle", 0.14, 0.16);
+  tone(783.99, 0.18, "triangle", 0.14, 0.26);
+  tone(1046.5, 0.20, "triangle", 0.12, 0.42);
+  tone(1318.5, 0.24, "triangle", 0.10, 0.60);
+}
+
+function playBooSound() {
+  tone(180, 0.10, "sawtooth", 0.08, 0);
+  tone(150, 0.16, "sawtooth", 0.06, 0.08);
+}
+
+function playCheerSound() {
+  tone(520, 0.08, "triangle", 0.10, 0);
+  tone(620, 0.10, "triangle", 0.10, 0.07);
+  tone(760, 0.12, "triangle", 0.10, 0.16);
+}
+
+function playCountdownBeep(num) {
+  const f = num > 1 ? 660 : 880;
+  tone(f, 0.10, "triangle", 0.11, 0);
+}
+
+function playGoSound() {
+  tone(880, 0.08, "triangle", 0.12, 0);
+  tone(1174.66, 0.12, "triangle", 0.12, 0.08);
+}
+
+function playPowerMeterBlip(power) {
+  if (power < 0.35) return;
+  const freq = 220 + power * 260;
+  tone(freq, 0.035, "triangle", 0.035, 0);
+}
+
+function setupIntroMusic() {
+  if (introMusic) return;
+
+  introMusic = new Audio("./intro-theme.MP3");
+  introMusic.loop = false;
+  introMusic.volume = 0.45;
+  introMusic.preload = "auto";
+}
+
+function setupHomeRunMusic() {
+  if (homeRunMusic) return;
+
+  homeRunMusic = new Audio("./intro-theme.MP3");
+  homeRunMusic.loop = false;
+  homeRunMusic.volume = 0.55;
+  homeRunMusic.preload = "auto";
+}
+
+async function playIntroMusic() {
+  try {
+    setupIntroMusic();
+    if (!introMusic || !soundEnabled) return;
+
+    if (introFadeTimer) {
+      clearInterval(introFadeTimer);
+      introFadeTimer = null;
+    }
+
+    introMusic.pause();
+    introMusic.currentTime = 0;
+    introMusic.volume = 0.45;
+    await introMusic.play();
+    introMusicStarted = true;
+  } catch (err) {
+    console.warn("Intro music could not play:", err);
+  }
+}
+
+function fadeOutIntroMusic(duration = 1800) {
+  if (!introMusic || introMusic.paused) return;
+
+  if (introFadeTimer) {
+    clearInterval(introFadeTimer);
+    introFadeTimer = null;
+  }
+
+  const startVolume = introMusic.volume;
+  const steps = 24;
+  const stepTime = duration / steps;
+  let currentStep = 0;
+
+  introFadeTimer = setInterval(() => {
+    currentStep++;
+    const t = currentStep / steps;
+    introMusic.volume = Math.max(0, startVolume * (1 - t));
+
+    if (currentStep >= steps) {
+      clearInterval(introFadeTimer);
+      introFadeTimer = null;
+      introMusic.pause();
+      introMusic.currentTime = 0;
+      introMusic.volume = 0.45;
+      introMusicStarted = false;
+    }
+  }, stepTime);
+}
+
+async function playHomeRunMusicBurst() {
+  try {
+    setupHomeRunMusic();
+    if (!homeRunMusic || !soundEnabled) return;
+
+    if (homeRunMusicTimer) {
+      clearTimeout(homeRunMusicTimer);
+      homeRunMusicTimer = null;
+    }
+
+    homeRunMusic.pause();
+    homeRunMusic.currentTime = 0;
+    homeRunMusic.volume = 0.55;
+    await homeRunMusic.play();
+
+    homeRunMusicTimer = setTimeout(() => {
+      if (homeRunMusic) {
+        homeRunMusic.pause();
+        homeRunMusic.currentTime = 0;
+      }
+    }, 2200);
+  } catch (err) {
+    console.warn("Home run music burst could not play:", err);
+  }
+}
+
+// ambient crowd
+function startAmbientCrowd() {
+  if (!audioCtx || !soundEnabled || ambientRunning) return;
+
+  ambientRunning = true;
+
+  if (!ambientMasterGain) {
+    ambientMasterGain = audioCtx.createGain();
+    ambientMasterGain.gain.value = 0.02;
+    ambientMasterGain.connect(audioCtx.destination);
+  }
+
+  ambientMasterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+  ambientMasterGain.gain.linearRampToValueAtTime(0.035, audioCtx.currentTime + 0.6);
+
+  ambientRumbleOsc = audioCtx.createOscillator();
+  ambientRumbleGain = audioCtx.createGain();
+
+  ambientRumbleOsc.type = "sine";
+  ambientRumbleOsc.frequency.value = 74;
+  ambientRumbleGain.gain.value = 0.010;
+
+  ambientRumbleOsc.connect(ambientRumbleGain);
+  ambientRumbleGain.connect(ambientMasterGain);
+  ambientRumbleOsc.start();
+
+  ambientCrowdInterval = setInterval(() => {
+    if (!audioCtx || !ambientRunning || !soundEnabled) return;
+
+    const base = 180 + Math.random() * 120;
+    tone(base, 0.25, "triangle", 0.012, 0);
+    tone(base * 1.18, 0.22, "triangle", 0.009, 0.04);
+
+    if (Math.random() > 0.65) {
+      tone(90 + Math.random() * 30, 0.18, "sine", 0.008, 0);
+    }
+  }, 900 + Math.random() * 600);
+}
+
+function stopAmbientCrowd() {
+  if (!ambientRunning) return;
+  ambientRunning = false;
+
+  if (ambientCrowdInterval) {
+    clearInterval(ambientCrowdInterval);
+    ambientCrowdInterval = null;
+  }
+
+  if (ambientMasterGain && audioCtx) {
+    ambientMasterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+    ambientMasterGain.gain.linearRampToValueAtTime(0.0, audioCtx.currentTime + 0.35);
+  }
+
+  if (ambientRumbleOsc) {
+    try { ambientRumbleOsc.stop(audioCtx.currentTime + 0.4); } catch(e) {}
+    ambientRumbleOsc = null;
+  }
+  ambientRumbleGain = null;
+}
+
+// ---------- HELPERS ----------
+function resizeCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width;
+  canvas.height = rect.height;
+}
+
+window.addEventListener("resize", resizeCanvas);
+
+function updateHud() {
+  if (scoreEl) scoreEl.textContent = score;
+  if (pitchesEl) pitchesEl.textContent = pitchesLeft;
+  if (hitsEl) hitsEl.textContent = hits;
+  if (missesEl) missesEl.textContent = misses;
+  if (veloEl) veloEl.textContent = Math.round(bestDistanceFt);
+
+  if (homeRunsEl) homeRunsEl.textContent = homeRuns;
+  if (bestHitEl) bestHitEl.textContent = `${Math.round(bestDistanceFt)} FT`;
+}
+
+function hideSplashScreen() {
+  if (!splashScreen) return;
+  splashScreen.classList.add("hidden");
+}
+
+function showSplashScreen() {
+  if (!splashScreen) return;
+  splashScreen.classList.remove("hidden");
+}
+
+function clearPitchTimer() {
+  if (pitchTimer) {
+    clearTimeout(pitchTimer);
+    pitchTimer = null;
+  }
+}
+
+function clearCountdownTimer() {
+  if (countdownTimer) {
+    clearTimeout(countdownTimer);
+    countdownTimer = null;
+  }
+}
+
+function clearSummaryTimer() {
+  if (typeof summaryTimer !== "undefined" && summaryTimer) {
+    clearTimeout(summaryTimer);
+    summaryTimer = null;
+  }
+}
+
+function showControlsPanel() {
+  if (!controlDock) return;
+  controlDock.classList.remove("hiddenDuringPlay");
+  controlDock.style.pointerEvents = "auto";
+}
+
+function hideControlsPanel() {
+  if (!controlDock) return;
+  controlDock.classList.add("hiddenDuringPlay");
+  controlDock.style.pointerEvents = "none";
+}
+
+function rotateTip() {
+  tipIndex = (tipIndex + 1) % TIPS.length;
+  if (instructionChip) {
+    instructionChip.textContent = TIPS[tipIndex];
+  }
+}
+
+function setCoachText(text, ms = 2200) {
+  coachText = text;
+  coachTextTimer = Math.round(ms / (1000 / 60));
+}
+
+function setCrowdText(text, ms = 1800) {
+  crowdText = text;
+  crowdTextTimer = Math.round(ms / (1000 / 60));
+}
+
+function updateCrowdMood(type) {
+  if (type === "home_run") {
+    crowdMood = "wild";
+    setCrowdText("CROWD GOES WILD!", 2200);
+    playCheerSound();
+    return;
+  }
+  if (type === "big_hit") {
+    crowdMood = "cheer";
+    setCrowdText("BIG CHEER!", 1800);
+    playCheerSound();
+    return;
+  }
+  if (type === "miss") {
+    crowdMood = "boo";
+    setCrowdText("OOOH!", 1500);
+    playBooSound();
+    return;
+  }
+  crowdMood = "quiet";
+}
+
+function scheduleNextPitch(extraDelayMs = 0) {
+  clearPitchTimer();
+
+  if (pitchesLeft <= 0) return;
+  if (gameState !== "playing") return;
+
+  const baseDelayMs = Math.round((parseFloat(pitchDelaySlider?.value || "3.5")) * 1000);
+  const delayMs = baseDelayMs + extraDelayMs;
+
+  rotateTip();
+
+  pitchTimer = setTimeout(() => {
+    if (gameState === "playing" && !ball) {
+      createPitch();
+      if (instructionChip) {
+        instructionChip.textContent = "Swing across your body to meet the ball.";
+      }
+      setCoachText("Coach: Eyes on the ball.");
+    }
+  }, delayMs);
+}
+
+function schedulePitchAfterFeedback(delayMs, extraDelayMs = 0) {
+  clearPitchTimer();
+
+  if (pitchesLeft <= 0 || gameState !== "playing") {
+    if (pitchesLeft <= 0) endRoundToSummary();
     return;
   }
 
-  // ================================
-  // CAMERA SETUP
-  // ================================
-  const video = document.createElement("video");
-  video.setAttribute("playsinline", "true");
-  video.setAttribute("autoplay", "true");
-  video.setAttribute("muted", "true");
-  video.style.display = "none";
-  document.body.appendChild(video);
-
-  let cameraReady = false;
-  let cameraStream = null;
-
-  async function startCamera() {
-    try {
-      if (cameraStream) return true;
-
-      cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "user",
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        audio: false
-      });
-
-      video.srcObject = cameraStream;
-
-      await new Promise((resolve) => {
-        video.onloadedmetadata = () => resolve();
-      });
-
-      await video.play();
-      cameraReady = true;
-      return true;
-    } catch (err) {
-      console.error("Camera failed:", err);
-      cameraReady = false;
-      return false;
-    }
-  }
-
-  // ================================
-  // CANVAS
-  // ================================
-  let width = 0;
-  let height = 0;
-
-  function resizeCanvas() {
-    width = canvas.width = window.innerWidth;
-    height = canvas.height = window.innerHeight;
-  }
-
-  window.addEventListener("resize", resizeCanvas);
-  resizeCanvas();
-
-  // ================================
-  // GAME STATE
-  // ================================
-  const TOTAL_PITCHES = 5;
-
-  let gameStarted = false;
-  let gameOver = false;
-  let paused = false;
-  let countdownActive = false;
-  let countdownValue = 5;
-
-  let score = 0;
-  let hits = 0;
-  let misses = 0;
-  let homeRuns = 0;
-  let pitchesLeft = TOTAL_PITCHES;
-
-  let currentMessage = "";
-  let currentSubMessage = "";
-  let messageUntil = 0;
-
-  let ball = null;
-  let nextPitchTimer = null;
-  let summaryReady = false;
-
-  let displayDistance = 0;
-  let targetDistance = 0;
-  let bestDistance = 0;
-
-  let swingFlash = 0;
-  let particles = [];
-  let homeRunGlow = 0;
-
-  // Player placement
-  const PLAYER_X = () => width * 0.18;
-  const PLAYER_Y = () => height * 0.78;
-  const PLAYER_SCALE = () => Math.min(width, height) * 0.00115;
-  const CONTACT_X = () => width * 0.31;
-
-  // pitch zone = stomach to mid-thigh area
-  function getPitchZoneTop() {
-    return height * 0.57;
-  }
-
-  function getPitchZoneBottom() {
-    return height * 0.71;
-  }
-
-  function getRandomPitchY() {
-    return getPitchZoneTop() + Math.random() * (getPitchZoneBottom() - getPitchZoneTop());
-  }
-
-  function clamp(v, min, max) {
-    return Math.max(min, Math.min(max, v));
-  }
-
-  function rand(min, max) {
-    return Math.random() * (max - min) + min;
-  }
-
-  function clearNextPitchTimer() {
-    if (nextPitchTimer) {
-      clearTimeout(nextPitchTimer);
-      nextPitchTimer = null;
-    }
-  }
-
-  function showMessage(title, subtitle = "", duration = 3200) {
-    currentMessage = title;
-    currentSubMessage = subtitle;
-    messageUntil = performance.now() + duration;
-  }
-
-  function isMessageVisible(now) {
-    return now < messageUntil;
-  }
-
-  function resetRound() {
-    clearNextPitchTimer();
-
-    score = 0;
-    hits = 0;
-    misses = 0;
-    homeRuns = 0;
-    pitchesLeft = TOTAL_PITCHES;
-
-    currentMessage = "";
-    currentSubMessage = "";
-    messageUntil = 0;
-
-    ball = null;
-    summaryReady = false;
-    displayDistance = 0;
-    targetDistance = 0;
-    bestDistance = 0;
-
-    particles = [];
-    homeRunGlow = 0;
-    paused = false;
-    gameOver = false;
-    countdownActive = false;
-    countdownValue = 5;
-    swingFlash = 0;
-  }
-
-  // ================================
-  // START / RESET
-  // ================================
-  async function startGame() {
-    const ok = await startCamera();
-    if (!ok) {
-      alert("Camera permission is required to start the game.");
+  pitchTimer = setTimeout(() => {
+    if (pitchesLeft <= 0) {
+      endRoundToSummary();
       return;
     }
+    scheduleNextPitch(extraDelayMs);
+  }, delayMs);
+}
 
-    resetRound();
-    gameStarted = true;
-    splash.style.display = "none";
-    startCountdown();
+function estimateDistanceFt(power, resultLabel) {
+  let base = 20 + power * 55;
+
+  if (resultLabel === "DOUBLE!") base += 18;
+  if (resultLabel === "TRIPLE!") base += 34;
+  if (resultLabel === "HOME RUN!") base += 55;
+
+  return Math.round(clamp(base, 12, 220));
+}
+
+function getFunHitText(resultLabel, distanceFt) {
+  if (resultLabel === "HOME RUN!") return `HOME RUN! ${distanceFt} FT`;
+  if (distanceFt >= 130) return `ROCKET BALL! ${distanceFt} FT`;
+  if (distanceFt >= 95) return `BIG SMASH! ${distanceFt} FT`;
+  if (distanceFt >= 70) return `NICE HIT! ${distanceFt} FT`;
+  return `${resultLabel} ${distanceFt} FT`;
+}
+
+function getMissFeedback() {
+  if (!lastBatTip || !ball) return "MISSED IT";
+
+  const dx = lastBatTip.x - ball.x;
+  const dy = lastBatTip.y - ball.y;
+
+  if (Math.abs(dy) > 36) {
+    return dy < 0 ? "SWING TOO HIGH" : "SWING TOO LOW";
   }
 
-  function returnToSplash() {
-    resetRound();
-    gameStarted = false;
-    splash.style.display = "flex";
+  return dx < 0 ? "TOO EARLY" : "TOO LATE";
+}
+
+function buildRoundSummary() {
+  let title = "Great Job!";
+  let message = "You played a strong round.";
+  let tip = "Try smooth swings and good timing for longer hits.";
+  let badge = "BXCM SLUGGER";
+
+  if (homeRuns >= 2) {
+    title = "Home Run Hero!";
+    message = `You blasted ${homeRuns} home runs!`;
+    tip = "Big upward swings can help launch the ball farther.";
+    badge = "POWER STAR";
+  } else if (bestDistanceFt >= 130) {
+    title = "Rocket Hitter!";
+    message = `Your best hit traveled ${bestDistanceFt} FT!`;
+    tip = "Fast swings plus strong timing can create big distance.";
+    badge = "DISTANCE ACE";
+  } else if (hits >= 6) {
+    title = "Contact Champ!";
+    message = `You made contact on ${hits} pitches.`;
+    tip = "Keeping your eye on timing helps you hit more often.";
+    badge = "CONTACT PRO";
+  } else if (hits >= 3) {
+    title = "Nice Swinging!";
+    message = `You made ${hits} solid hits this round.`;
+    tip = "Try swinging a little sooner or later to find perfect timing.";
+    badge = "RISING SLUGGER";
+  } else {
+    title = "Keep Practicing!";
+    message = "Every swing helps you learn.";
+    tip = "A smooth swing and good timing can send the ball farther.";
+    badge = "TRY AGAIN STAR";
   }
 
-  startBtn.addEventListener("click", startGame);
+  return { title, message, tip, badge };
+}
 
-  // ================================
-  // COUNTDOWN
-  // ================================
-  function startCountdown() {
-    countdownActive = true;
-    countdownValue = 5;
-    ball = null;
+function endRoundToSummary() {
+  clearPitchTimer();
+  clearCountdownTimer();
+  stopAmbientCrowd();
 
-    const tick = () => {
-      if (!countdownActive) return;
+  showRoundComplete = true;
+  roundCompleteTimer = Math.round(ROUND_COMPLETE_MS / (1000 / 60));
+  gameState = "round_complete";
 
-      if (countdownValue > 0) {
-        showMessage(String(countdownValue), "Get ready...", 700);
-        countdownValue--;
-        setTimeout(tick, 850);
-      } else {
-        countdownActive = false;
-        showMessage("LET'S PLAY BALL!", "", 1100);
-        setTimeout(() => {
-          createPitch();
-        }, 900);
-      }
+  summaryTimer = setTimeout(() => {
+    showRoundComplete = false;
+    roundSummary = buildRoundSummary();
+    gameState = "summary";
+    showControlsPanel();
+    setCoachText("Coach: Review the round and press Reset when you're ready.", 5000);
+  }, ROUND_COMPLETE_MS + 2200);
+}
+
+// ---------- CHARACTER ----------
+function getKeypoint(pose, name, minScore = 0.28) {
+  return pose?.keypoints?.find(k => k.name === name && (k.score ?? 0) > minScore) || null;
+}
+
+function scalePoint(p, center, scale) {
+  if (!p) return null;
+  return {
+    x: center.x + (p.x - center.x) * scale + SKELETON_OFFSET_X,
+    y: center.y + (p.y - center.y) * scale + SKELETON_OFFSET_Y
+  };
+}
+
+function getPoseCenter(points) {
+  const valid = points.filter(Boolean);
+  if (!valid.length) return null;
+  return {
+    x: valid.reduce((s, p) => s + p.x, 0) / valid.length,
+    y: valid.reduce((s, p) => s + p.y, 0) / valid.length
+  };
+}
+
+function getScaledPosePoints(pose) {
+  const rawPoints = {
+    nose: getKeypoint(pose, "nose"),
+    leftShoulder: getKeypoint(pose, "left_shoulder"),
+    rightShoulder: getKeypoint(pose, "right_shoulder"),
+    leftElbow: getKeypoint(pose, "left_elbow"),
+    rightElbow: getKeypoint(pose, "right_elbow"),
+    leftWrist: getKeypoint(pose, "left_wrist"),
+    rightWrist: getKeypoint(pose, "right_wrist"),
+    leftHip: getKeypoint(pose, "left_hip"),
+    rightHip: getKeypoint(pose, "right_hip"),
+    leftKnee: getKeypoint(pose, "left_knee"),
+    rightKnee: getKeypoint(pose, "right_knee"),
+    leftAnkle: getKeypoint(pose, "left_ankle"),
+    rightAnkle: getKeypoint(pose, "right_ankle")
+  };
+
+  const present = Object.values(rawPoints).filter(Boolean);
+  const center = getPoseCenter(present);
+  if (!center) return rawPoints;
+
+  const scaled = {};
+  for (const [key, value] of Object.entries(rawPoints)) {
+    scaled[key] = scalePoint(value, center, SKELETON_SCALE);
+  }
+
+  return scaled;
+}
+
+function drawSilhouetteFigure(pose) {
+  const p = getScaledPosePoints(pose);
+
+  const nose = p.nose;
+  const ls = p.leftShoulder;
+  const rs = p.rightShoulder;
+  const le = p.leftElbow;
+  const re = p.rightElbow;
+  const lw = p.leftWrist;
+  const rw = p.rightWrist;
+  const lh = p.leftHip;
+  const rh = p.rightHip;
+  const lk = p.leftKnee;
+  const rk = p.rightKnee;
+  const la = p.leftAnkle;
+  const ra = p.rightAnkle;
+
+  const joints = [nose, ls, rs, le, re, lw, rw, lh, rh, lk, rk, la, ra].filter(Boolean);
+  if (joints.length < 4) return null;
+
+  const neck = ls && rs ? { x: (ls.x + rs.x) / 2, y: (ls.y + rs.y) / 2 } : null;
+  const pelvis = lh && rh ? { x: (lh.x + rh.x) / 2, y: (lh.y + rh.y) / 2 } : null;
+
+  const shoulderWidth = ls && rs ? Math.hypot(rs.x - ls.x, rs.y - ls.y) : 70;
+  const torsoW = Math.max(44, shoulderWidth * 0.82);
+  const torsoH = neck && pelvis ? Math.max(78, Math.hypot(pelvis.x - neck.x, pelvis.y - neck.y) * 1.05) : 120;
+  const headR = Math.max(20, Math.min(34, shoulderWidth * 0.34));
+
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  function capsule(a, b, width, color, alpha = 1) {
+    if (!a || !b) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = color;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function circle(pt, r, color, alpha = 1) {
+    if (!pt) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = color;
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  const headColor = "rgba(125,77,255,0.92)";
+  const bodyColor = "rgba(37,169,255,0.82)";
+  const limbColor = "rgba(46,213,115,0.80)";
+  const accentColor = "rgba(255,212,59,0.92)";
+
+  if (nose && neck) {
+    const headCenter = { x: nose.x, y: nose.y - headR * 0.12 };
+    circle(headCenter, headR, headColor, 0.95);
+
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.beginPath();
+    ctx.ellipse(headCenter.x, headCenter.y - 2, headR * 0.62, headR * 0.24, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  if (neck && pelvis) {
+    const torsoCenter = {
+      x: (neck.x + pelvis.x) / 2,
+      y: (neck.y + pelvis.y) / 2
     };
 
-    tick();
+    ctx.save();
+    ctx.translate(torsoCenter.x, torsoCenter.y);
+    ctx.fillStyle = bodyColor;
+    ctx.shadowBlur = 26;
+    ctx.shadowColor = "rgba(37,169,255,0.55)";
+    ctx.beginPath();
+    ctx.roundRect(-torsoW / 2, -torsoH / 2, torsoW, torsoH, 26);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(255,255,255,0.15)";
+    ctx.beginPath();
+    ctx.roundRect(-torsoW * 0.28, -torsoH * 0.22, torsoW * 0.56, torsoH * 0.18, 12);
+    ctx.fill();
+    ctx.restore();
   }
 
-  // ================================
-  // BALL
-  // ================================
-  function createPitch() {
-    if (!gameStarted || gameOver || paused) return;
-    if (pitchesLeft <= 0) {
-      endGame();
-      return;
+  circle(ls, 10, bodyColor, 0.9);
+  circle(rs, 10, bodyColor, 0.9);
+  circle(lh, 10, bodyColor, 0.85);
+  circle(rh, 10, bodyColor, 0.85);
+
+  capsule(ls, le, 18, limbColor, 0.88);
+  capsule(le, lw, 14, limbColor, 0.84);
+  capsule(rs, re, 18, limbColor, 0.88);
+  capsule(re, rw, 14, limbColor, 0.84);
+
+  capsule(lh, lk, 20, limbColor, 0.80);
+  capsule(lk, la, 16, limbColor, 0.76);
+  capsule(rh, rk, 20, limbColor, 0.80);
+  capsule(rk, ra, 16, limbColor, 0.76);
+
+  circle(lw, 8, accentColor, 0.95);
+  circle(rw, 8, accentColor, 0.95);
+  circle(la, 8, accentColor, 0.75);
+  circle(ra, 8, accentColor, 0.75);
+
+  if (neck && pelvis) {
+    capsule(neck, pelvis, 8, "rgba(255,255,255,0.18)", 0.65);
+  }
+
+  ctx.restore();
+  return p;
+}
+
+function getBattingArm(points) {
+  if (!points) return null;
+
+  if (battingSide === "right") {
+    if (points.rightWrist && points.rightElbow) {
+      return { wrist: points.rightWrist, elbow: points.rightElbow };
     }
-
-    targetDistance = 0;
-    displayDistance = 0;
-
-    ball = {
-      x: width * 0.90,
-      y: getRandomPitchY(),
-      vx: -10.5,
-      vy: rand(-0.10, 0.10),
-      radius: 14,
-      hit: false,
-      result: "",
-      finalDistance: 0
-    };
-
-    pitchesLeft--;
-  }
-
-  function scheduleNextPitch(delay = 1800) {
-    clearNextPitchTimer();
-    nextPitchTimer = setTimeout(() => {
-      if (!gameOver && !paused) createPitch();
-    }, delay);
-  }
-
-  function resolveMiss(reason) {
-    misses++;
-    ball = null;
-    targetDistance = 0;
-
-    showMessage("MISS!", reason, 3400);
-
-    if (pitchesLeft <= 0) {
-      setTimeout(endGame, 2200);
-    } else {
-      scheduleNextPitch(2200);
-    }
-  }
-
-  function resolveHit(kind, distance) {
-    hits++;
-    targetDistance = distance;
-    bestDistance = Math.max(bestDistance, distance);
-
-    let points = 0;
-    let title = "";
-    let subtitle = `${distance} FT`;
-
-    if (kind === "home_run") {
-      homeRuns++;
-      points = 100;
-      title = "HOME RUN!";
-      homeRunGlow = 1;
-      spawnCelebration(ball.x, ball.y, 80);
-      scheduleNextPitch(4200);
-    } else if (kind === "big_hit") {
-      points = 60;
-      title = "BIG HIT!";
-      spawnCelebration(ball.x, ball.y, 36);
-      scheduleNextPitch(3200);
-    } else {
-      points = 30;
-      title = "NICE HIT!";
-      spawnCelebration(ball.x, ball.y, 18);
-      scheduleNextPitch(2500);
-    }
-
-    score += points;
-    ball.result = kind;
-    ball.finalDistance = distance;
-
-    showMessage(title, subtitle, kind === "home_run" ? 4300 : 3000);
-
-    if (pitchesLeft <= 0) {
-      clearNextPitchTimer();
-      setTimeout(endGame, kind === "home_run" ? 4500 : 3000);
+  } else {
+    if (points.leftWrist && points.leftElbow) {
+      return { wrist: points.leftWrist, elbow: points.leftElbow };
     }
   }
 
-  // ================================
-  // SWING
-  // ================================
-  function swing() {
-    if (!gameStarted || gameOver || paused || countdownActive) return;
+  return null;
+}
 
-    swingFlash = 1;
+function drawBatFromSide(wrist, elbow) {
+  if (!wrist || !elbow) return null;
 
-    if (!ball || ball.hit) return;
+  const dx = wrist.x - elbow.x;
+  const dy = wrist.y - elbow.y;
+  const len = Math.hypot(dx, dy) || 1;
 
-    const dx = Math.abs(ball.x - CONTACT_X());
-    const dy = ball.y - (PLAYER_Y() - 70);
+  const ux = dx / len;
+  const uy = dy / len;
 
-    // if ball is already past the batter, no hit
-    if (ball.x < PLAYER_X() + 60) {
-      resolveMiss("Too late");
-      return;
-    }
+  const batTip = {
+    x: wrist.x + ux * BAT_LENGTH,
+    y: wrist.y + uy * BAT_LENGTH
+  };
 
-    // vertical feedback
-    if (Math.abs(dy) > 120) {
-      if (dy < 0) resolveMiss("Swing too high");
-      else resolveMiss("Swing too low");
-      return;
-    }
+  ctx.save();
+  ctx.strokeStyle = "#4e342e";
+  ctx.lineWidth = 16;
+  ctx.shadowBlur = 18;
+  ctx.shadowColor = "rgba(0,0,0,0.25)";
+  ctx.beginPath();
+  ctx.moveTo(wrist.x, wrist.y);
+  ctx.lineTo(batTip.x, batTip.y);
+  ctx.stroke();
 
-    // timing windows
-    if (dx < 24) {
-      ball.hit = true;
-      ball.vx = rand(10, 13);
-      ball.vy = rand(-11, -8.3);
-      resolveHit("home_run", Math.round(rand(170, 235)));
-      return;
-    }
+  ctx.strokeStyle = "#ffca28";
+  ctx.lineWidth = 8;
+  ctx.shadowBlur = 16;
+  ctx.shadowColor = "#ffca28";
+  ctx.beginPath();
+  ctx.moveTo(wrist.x, wrist.y);
+  ctx.lineTo(batTip.x, batTip.y);
+  ctx.stroke();
+  ctx.restore();
 
-    if (dx < 56) {
-      ball.hit = true;
-      ball.vx = rand(8.2, 10.2);
-      ball.vy = rand(-8.2, -6.1);
-      resolveHit("big_hit", Math.round(rand(105, 165)));
-      return;
-    }
+  return batTip;
+}
 
-    if (dx < 92) {
-      ball.hit = true;
-      ball.vx = rand(6.3, 8.0);
-      ball.vy = rand(-5.4, -4.0);
-      resolveHit("single", Math.round(rand(60, 105)));
-      return;
-    }
+function updateBatVelocity(point) {
+  const now = performance.now();
 
-    if (ball.x > CONTACT_X()) {
-      resolveMiss("Too early");
-    } else {
-      resolveMiss("Too late");
-    }
+  if (!prevBatPoint) {
+    prevBatPoint = { ...point, t: now };
+    batVelocity = { x: 0, y: 0, speed: 0 };
+    return;
   }
 
-  window.addEventListener("click", swing);
-  window.addEventListener("touchstart", swing, { passive: true });
+  const dt = Math.max((now - prevBatPoint.t) / 1000, 0.001);
+  const vx = (point.x - prevBatPoint.x) / dt;
+  const vy = (point.y - prevBatPoint.y) / dt;
 
-  window.addEventListener("keydown", (e) => {
-    if (e.code === "Space") {
-      e.preventDefault();
+  batVelocity = {
+    x: vx,
+    y: vy,
+    speed: Math.hypot(vx, vy)
+  };
 
-      if (!gameStarted) return;
-      if (gameOver) return;
-      if (countdownActive) return;
+  prevBatPoint = { ...point, t: now };
 
-      paused = !paused;
+  const power = clamp(batVelocity.speed / 750, 0, 1);
+  swingPowerDisplay += (power - swingPowerDisplay) * 0.35;
+  swingPowerPeak = Math.max(swingPowerPeak * 0.96, swingPowerDisplay);
 
-      if (!paused && !ball && pitchesLeft > 0) {
-        scheduleNextPitch(500);
-      }
-    }
+  if (power > 0.75 && Math.random() > 0.82 && gameState === "playing") {
+    playPowerMeterBlip(power);
+  }
+}
 
-    if (e.code === "Enter") {
-      if (!gameStarted) startGame();
-    }
+function updateBatTrail(point) {
+  batTrail.push({ x: point.x, y: point.y, life: 10 });
+  if (batTrail.length > 14) batTrail.shift();
+  lastBatTip = point;
+}
 
-    if (e.code === "KeyR") {
-      if (gameOver) returnToSplash();
-    }
+function tickBatTrail() {
+  for (let i = batTrail.length - 1; i >= 0; i--) {
+    batTrail[i].life--;
+    if (batTrail[i].life <= 0) batTrail.splice(i, 1);
+  }
+  swingPowerPeak *= 0.985;
+}
+
+function drawBatTrail() {
+  for (let i = 0; i < batTrail.length; i++) {
+    const p = batTrail[i];
+    const alpha = clamp(p.life / 10, 0, 1) * 0.35;
+    const radius = 8 + (batTrail.length - i) * 0.5;
+    ctx.fillStyle = `rgba(255, 202, 40, ${alpha})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ---------- THERMOMETER + ACCURACY ----------
+function drawSwingPowerMeter() {
+  const x = canvas.width - 70;
+  const y = canvas.height * 0.22;
+  const w = 26;
+  const h = 220;
+  const bulbR = 18;
+
+  ctx.save();
+
+  ctx.fillStyle = "rgba(10,20,40,0.72)";
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 16);
+  ctx.fill();
+
+  const fillH = h * clamp(swingPowerPeak, 0, 1);
+  const fillY = y + h - fillH;
+
+  const grad = ctx.createLinearGradient(0, y + h, 0, y);
+  grad.addColorStop(0, "#2ed573");
+  grad.addColorStop(0.5, "#ffd43b");
+  grad.addColorStop(1, "#ff7043");
+
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(x + 4, fillY, w - 8, fillH, 12);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(x + w / 2, y + h + 18, bulbR, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(255,255,255,0.28)";
+  ctx.stroke();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 12px "Nunito", sans-serif';
+  ctx.textAlign = "center";
+  ctx.fillText("SWING", x + w / 2, y - 12);
+  ctx.fillText("POWER", x + w / 2, y + h + 48);
+
+  ctx.restore();
+}
+
+function drawAccuracyMeter() {
+  const meterW = 240;
+  const meterH = 18;
+  const x = canvas.width * 0.5 - meterW / 2;
+  const y = canvas.height * 0.08;
+
+  ctx.save();
+
+  ctx.fillStyle = "rgba(10,20,40,0.72)";
+  ctx.beginPath();
+  ctx.roundRect(x, y, meterW, meterH, 12);
+  ctx.fill();
+
+  ctx.fillStyle = "#ff9f1a";
+  ctx.beginPath();
+  ctx.roundRect(x + 4, y + 4, meterW * 0.38, meterH - 8, 8);
+  ctx.fill();
+
+  ctx.fillStyle = "#2ed573";
+  ctx.beginPath();
+  ctx.roundRect(x + meterW * 0.38, y + 4, meterW * 0.24, meterH - 8, 8);
+  ctx.fill();
+
+  ctx.fillStyle = "#ff9f1a";
+  ctx.beginPath();
+  ctx.roundRect(x + meterW * 0.62, y + 4, meterW * 0.34, meterH - 8, 8);
+  ctx.fill();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 12px "Nunito", sans-serif';
+  ctx.textAlign = "center";
+  ctx.fillText("EARLY", x + meterW * 0.18, y - 6);
+  ctx.fillText("PERFECT", x + meterW * 0.50, y - 6);
+  ctx.fillText("LATE", x + meterW * 0.79, y - 6);
+
+  if (accuracyMarkerTimer > 0) {
+    const markerX = clamp(x + meterW * lastTimingOffset, x + 6, x + meterW - 6);
+
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(markerX, y - 4);
+    ctx.lineTo(markerX, y + meterH + 4);
+    ctx.stroke();
+
+    ctx.fillStyle = lastTimingRating === "PERFECT!" ? "#2ed573" : "#ffffff";
+    ctx.font = '900 14px "Baloo 2", sans-serif';
+    ctx.fillText(lastTimingRating, x + meterW / 2, y + 38);
+
+    accuracyMarkerTimer--;
+  }
+
+  ctx.restore();
+}
+
+function setAccuracyMarker(offset, rating) {
+  lastTimingOffset = clamp(offset, 0, 1);
+  lastTimingRating = rating;
+  accuracyMarkerTimer = Math.round(2200 / (1000 / 60));
+}
+
+// ---------- TIMING ----------
+function getTimingFeedback(batTip, ballObj) {
+  const diff = batTip.x - ballObj.x;
+  const absDiff = Math.abs(diff);
+
+  if (absDiff <= 16) {
+    setAccuracyMarker(0.50, "PERFECT!");
+    return { label: "PERFECT!", powerBonus: 1.14, direction: 1.0 };
+  }
+
+  if (diff < -16) {
+    setAccuracyMarker(0.22, "TOO EARLY");
+    return { label: "TOO EARLY", powerBonus: 0.86, direction: 0.92 };
+  }
+
+  setAccuracyMarker(0.80, "TOO LATE");
+  return { label: "TOO LATE", powerBonus: 0.84, direction: 1.05 };
+}
+
+// ---------- BALL ----------
+function createPitch() {
+  if (pitchesLeft <= 0) return;
+  if (gameState !== "playing") return;
+  if (ball) return;
+
+  CONTACT_DISTANCE = DIFFICULTIES[difficulty].contactDistance;
+  const scale = DIFFICULTIES[difficulty].ballScale;
+
+  ball = {
+    x: canvas.width * 0.88,
+    y: canvas.height * (0.56 + Math.random() * 0.06),
+    vx: -(parseFloat(pitchSpeedSlider?.value || "12")) - Math.random() * 1.2,
+    vy: (Math.random() - 0.5) * 0.18,
+    size: BALL_RADIUS * scale,
+    hit: false,
+    active: true,
+    trail: [],
+    result: "",
+    estimatedDistanceFt: 0,
+    contactX: 0
+  };
+
+  playPitchSound();
+  setCoachText("Coach: Track it all the way in.");
+}
+
+function classifyHit(power, upwardSwing) {
+  if (power > 1.9 && upwardSwing > 0.6) {
+    return { label: "HOME RUN!", points: 80, confettiCount: 42, launchBoost: 1.28 };
+  }
+  if (power > 1.5 && upwardSwing > 0.25) {
+    return { label: "TRIPLE!", points: 45, confettiCount: 24, launchBoost: 1.02 };
+  }
+  if (power > 1.08) {
+    return { label: "DOUBLE!", points: 28, confettiCount: 16, launchBoost: 0.88 };
+  }
+  if (power > 0.66) {
+    return { label: "SINGLE!", points: 16, confettiCount: 10, launchBoost: 0.72 };
+  }
+  return { label: "FOUL TIP!", points: 8, confettiCount: 6, launchBoost: 0.54 };
+}
+
+function tryHit(batTip) {
+  if (!ball || !ball.active || ball.hit) return;
+  if (ball.x < canvas.width * 0.26) return;
+
+  const d = Math.hypot(ball.x - batTip.x, ball.y - batTip.y);
+  if (d > CONTACT_DISTANCE) return;
+  if (batVelocity.speed < parseFloat(swingThresholdSlider?.value || "420")) return;
+
+  ball.hit = true;
+
+  const timing = getTimingFeedback(batTip, ball);
+  let power = clamp(batVelocity.speed / 700, 0.35, 2.1);
+  power *= timing.powerBonus;
+
+  const upwardSwing = clamp((-batVelocity.y) / 700, -0.4, 1.0);
+  const lateral = batVelocity.x >= 0 ? 1 : -1;
+
+  const result = classifyHit(power, upwardSwing);
+
+  const baseVX = 9 + power * 8;
+  const baseVY = -(4 + Math.max(0, upwardSwing) * 7 + power * 2.2);
+
+  ball.vx =
+    lateral *
+    baseVX *
+    result.launchBoost *
+    timing.direction +
+    (Math.random() - 0.5) * 1.2;
+
+  ball.vy =
+    baseVY * result.launchBoost +
+    (Math.random() - 0.5) * 1.0;
+
+  ball.result = result.label;
+  ball.contactX = ball.x;
+  ball.estimatedDistanceFt = estimateDistanceFt(power, result.label);
+  currentDistanceFt = 0;
+
+  score += result.points;
+  hits++;
+  pitchesLeft--;
+
+  if (result.label === "HOME RUN!") {
+    hitText = getFunHitText(result.label, ball.estimatedDistanceFt);
+    hitTextTimer = Math.round((HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    timingText = timing.label;
+    timingTextTimer = Math.round((HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    distanceText = `${ball.estimatedDistanceFt} FT`;
+    distanceTextTimer = Math.round((HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    setCoachText("Coach: BOOM! That's your power swing!", 3000);
+    updateCrowdMood("home_run");
+  } else if (result.label === "TRIPLE!" || result.label === "DOUBLE!") {
+    hitText = getFunHitText(result.label, ball.estimatedDistanceFt);
+    hitTextTimer = Math.round((BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    timingText = timing.label;
+    timingTextTimer = Math.round((BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    distanceText = `${ball.estimatedDistanceFt} FT`;
+    distanceTextTimer = Math.round((BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    setCoachText("Coach: Nice barrel! Great contact.", 2600);
+    updateCrowdMood("big_hit");
+  } else {
+    hitText = getFunHitText(result.label, ball.estimatedDistanceFt);
+    hitTextTimer = Math.round((HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    timingText = timing.label;
+    timingTextTimer = Math.round((HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    distanceText = `${ball.estimatedDistanceFt} FT`;
+    distanceTextTimer = Math.round((HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+    setCoachText("Coach: Nice swing. Keep that timing.", 2200);
+  }
+
+  spawnConfetti(ball.x, ball.y, result.confettiCount);
+  spawnStars(ball.x, ball.y, result.label);
+
+  if (result.label === "HOME RUN!") {
+    homeRuns++;
+    playHomeRunSound();
+    playHomeRunMusicBurst();
+    triggerHomeRunCelebration(ball.x, ball.y);
+    if (instructionChip) instructionChip.textContent = "HOME RUN! That one flew a long way!";
+  } else if (result.label === "TRIPLE!" || result.label === "DOUBLE!") {
+    playBigHitSound();
+    if (instructionChip) instructionChip.textContent = "Big hit! Watch how far it goes!";
+  } else {
+    playHitSound();
+    if (instructionChip) instructionChip.textContent = "Nice contact!";
+  }
+
+  bestDistanceFt = Math.max(bestDistanceFt, ball.estimatedDistanceFt);
+  updateHud();
+}
+
+function resolveMiss() {
+  misses++;
+  pitchesLeft--;
+  ball = null;
+  currentDistanceFt = 0;
+  updateHud();
+  playMissSound();
+  updateCrowdMood("miss");
+
+  const missFeedback = getMissFeedback();
+  missText = missFeedback;
+  missTextTimer = Math.round((MISS_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
+
+  if (instructionChip) {
+    instructionChip.textContent =
+      missFeedback === "TOO EARLY" || missFeedback === "TOO LATE"
+        ? "Try changing your timing on the next pitch."
+        : "Adjust your swing height on the next pitch.";
+  }
+
+  if (missFeedback === "TOO EARLY") setCoachText("Coach: Start just a little later.", 2600);
+  if (missFeedback === "TOO LATE") setCoachText("Coach: Swing a little sooner.", 2600);
+  if (missFeedback === "SWING TOO HIGH") setCoachText("Coach: Bring the bat down a little.", 2600);
+  if (missFeedback === "SWING TOO LOW") setCoachText("Coach: Lift the bat a little higher.", 2600);
+
+  if (pitchesLeft <= 0) {
+    pitchTimer = setTimeout(() => {
+      endRoundToSummary();
+    }, MISS_FEEDBACK_MS + FEEDBACK_FADE_MS + 1200);
+  } else {
+    pitchTimer = setTimeout(() => {
+      scheduleNextPitch();
+    }, MISS_FEEDBACK_MS + FEEDBACK_FADE_MS);
+  }
+}
+
+function resolveFinishedHit() {
+  const resultLabel = ball?.result || "";
+  const finalDistance = Math.max(currentDistanceFt, ball?.estimatedDistanceFt || 0);
+
+  bestDistanceFt = Math.max(bestDistanceFt, finalDistance);
+  updateHud();
+
+  ball = null;
+  currentDistanceFt = 0;
+
+  if (instructionChip) {
+    instructionChip.textContent = "Nice! Get ready for the next pitch.";
+  }
+
+  if (pitchesLeft <= 0) {
+    const endDelay =
+      resultLabel === "HOME RUN!"
+        ? HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS + 1800
+        : resultLabel === "TRIPLE!" || resultLabel === "DOUBLE!"
+          ? BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS + 1200
+          : HIT_FEEDBACK_MS + FEEDBACK_FADE_MS + 900;
+
+    pitchTimer = setTimeout(() => {
+      endRoundToSummary();
+    }, endDelay);
+    return;
+  }
+
+  if (resultLabel === "HOME RUN!") {
+    schedulePitchAfterFeedback(HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS, 2000);
+  } else if (resultLabel === "TRIPLE!" || resultLabel === "DOUBLE!") {
+    schedulePitchAfterFeedback(BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS);
+  } else {
+    schedulePitchAfterFeedback(HIT_FEEDBACK_MS + FEEDBACK_FADE_MS);
+  }
+}
+
+function spawnHomeRunTrail() {
+  if (!ball || ball.result !== "HOME RUN!") return;
+
+  homerTrailParticles.push({
+    x: ball.x,
+    y: ball.y,
+    vx: (Math.random() - 0.5) * 1.5,
+    vy: (Math.random() - 0.5) * 1.5,
+    life: 18 + Math.random() * 8,
+    size: 4 + Math.random() * 5,
+    color: ["#ffd54f", "#ffffff", "#42a5f5", "#ff7043"][Math.floor(Math.random() * 4)]
   });
+}
 
-  // ================================
-  // END GAME
-  // ================================
-  function endGame() {
-    gameOver = true;
-    paused = false;
-    ball = null;
-    summaryReady = true;
+function updateBall() {
+  if (!ball || !ball.active) return;
+  if (gameState !== "playing") return;
 
-    let title = "Great Job!";
-    let subtitle = `Hits: ${hits} • Home Runs: ${homeRuns} • Best: ${Math.round(bestDistance)} FT`;
+  if (!ball.hit) {
+    ball.x += ball.vx;
+    ball.y += ball.vy;
 
-    if (homeRuns >= 2) title = "Home Run Hero!";
-    else if (bestDistance >= 160) title = "Rocket Hitter!";
-    else if (hits >= 3) title = "Nice Swinging!";
-    else if (hits === 0) title = "Keep Practicing!";
+    ball.trail.push({ x: ball.x, y: ball.y, a: 0.16, s: ball.size });
+    if (ball.trail.length > 7) ball.trail.shift();
 
-    showMessage(title, subtitle, 999999);
-  }
-
-  // ================================
-  // PARTICLES
-  // ================================
-  function spawnCelebration(x, y, count) {
-    for (let i = 0; i < count; i++) {
-      particles.push({
-        x,
-        y,
-        vx: rand(-5, 5),
-        vy: rand(-8, -1),
-        size: rand(4, 10),
-        life: rand(35, 70),
-        color: ["#FFD43B", "#25A9FF", "#7D4DFF", "#2ED573", "#FF8A00"][Math.floor(rand(0, 5))]
-      });
+    if (ball.x < canvas.width * 0.22) {
+      resolveMiss();
     }
-  }
+  } else {
+    ball.vy += GRAVITY;
+    ball.vx *= 0.992;
+    ball.vy *= 0.996;
 
-  function updateParticles() {
-    for (let i = particles.length - 1; i >= 0; i--) {
-      const p = particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vy += 0.18;
-      p.life--;
-      if (p.life <= 0) particles.splice(i, 1);
-    }
-  }
+    ball.x += ball.vx;
+    ball.y += ball.vy;
 
-  function drawParticles() {
-    for (const p of particles) {
-      ctx.save();
-      ctx.globalAlpha = clamp(p.life / 70, 0, 1);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(p.x, p.y, p.size, p.size);
-      ctx.restore();
-    }
-  }
+    ball.trail.push({ x: ball.x, y: ball.y, a: 0.24, s: ball.size });
+    if (ball.trail.length > 16) ball.trail.shift();
 
-  // ================================
-  // UPDATE
-  // ================================
-  function update() {
-    if (!gameStarted || paused || gameOver || countdownActive) {
-      updateParticles();
-      displayDistance += (targetDistance - displayDistance) * 0.08;
-      homeRunGlow *= 0.96;
-      swingFlash *= 0.90;
-      return;
+    if (ball.result === "HOME RUN!") {
+      spawnHomeRunTrail();
+      spawnHomeRunTrail();
     }
 
-    updateParticles();
-
-    if (ball) {
-      if (!ball.hit) {
-        ball.x += ball.vx;
-        ball.y += ball.vy;
-
-        if (ball.x < PLAYER_X() + 20) {
-          resolveMiss("Too late");
-        }
-      } else {
-        ball.x += ball.vx;
-        ball.y += ball.vy;
-        ball.vy += 0.25;
-
-        if (ball.y > height + 50 || ball.x > width + 80) {
-          ball = null;
-        }
-      }
+    if (ball.y > canvas.height + 60 || ball.x < -90 || ball.x > canvas.width + 90) {
+      resolveFinishedHit();
     }
-
-    displayDistance += (targetDistance - displayDistance) * 0.08;
-    homeRunGlow *= 0.96;
-    swingFlash *= 0.90;
   }
+}
 
-  // ================================
-  // DRAW
-  // ================================
-  function drawCameraLayer() {
-    if (!cameraReady || video.readyState < 2) return;
+function updateDistanceDuringFlight() {
+  if (!ball || !ball.hit) return;
 
-    ctx.save();
-    ctx.globalAlpha = 0.18;
-    ctx.translate(width, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, width, height);
-    ctx.restore();
+  const startX = ball.contactX ?? ball.x;
+  const travelPx = Math.abs(ball.x - startX) + Math.abs(ball.y - canvas.height * 0.62) * 0.15;
+  currentDistanceFt = Math.min(ball.estimatedDistanceFt || 0, Math.round(travelPx * 0.30));
+}
 
-    // darken camera so gameplay stays visible
-    ctx.save();
-    ctx.fillStyle = "rgba(4,10,22,0.52)";
-    ctx.fillRect(0, 0, width, height);
-    ctx.restore();
-  }
+function drawBall() {
+  if (!ball || !ball.active) return;
 
-  function drawBackground() {
-    const bg = ctx.createLinearGradient(0, 0, width, height);
-    bg.addColorStop(0, "#08182f");
-    bg.addColorStop(0.45, "#06214a");
-    bg.addColorStop(1, "#04101f");
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, width, height);
-
-    drawCameraLayer();
-
-    // subtle batting-lane styling
-    ctx.save();
-    ctx.globalAlpha = 0.10;
-    ctx.fillStyle = "#ffd43b";
+  for (let i = 0; i < ball.trail.length; i++) {
+    const p = ball.trail[i];
+    const alpha = ((i + 1) / ball.trail.length) * p.a;
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
     ctx.beginPath();
-    ctx.arc(width * 0.14, height * 0.18, 120, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, Math.max(4, (p.s || BALL_RADIUS) * 0.58), 0, Math.PI * 2);
     ctx.fill();
-
-    ctx.fillStyle = "#25a9ff";
-    ctx.beginPath();
-    ctx.arc(width * 0.86, height * 0.22, 140, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = "#7d4dff";
-    ctx.beginPath();
-    ctx.arc(width * 0.76, height * 0.82, 120, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    if (homeRunGlow > 0.02) {
-      ctx.save();
-      ctx.globalAlpha = homeRunGlow * 0.28;
-      const glow = ctx.createLinearGradient(0, 0, width, height);
-      glow.addColorStop(0, "#7D4DFF");
-      glow.addColorStop(0.5, "#25A9FF");
-      glow.addColorStop(1, "#FFD43B");
-      ctx.fillStyle = glow;
-      ctx.fillRect(0, 0, width, height);
-      ctx.restore();
-    }
-
-    // floor / lane
-    ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.08)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(width * 0.04, height * 0.69);
-    ctx.lineTo(width * 0.96, height * 0.69);
-    ctx.stroke();
-    ctx.restore();
-
-    // camera status
-    ctx.save();
-    ctx.fillStyle = cameraReady ? "#2ED573" : "#ff6b6b";
-    ctx.font = "800 14px Arial";
-    ctx.fillText(cameraReady ? "CAMERA ON" : "CAMERA OFF", width - 130, 28);
-    ctx.restore();
   }
 
-  function drawPlayer() {
-    const px = PLAYER_X();
-    const py = PLAYER_Y();
-    const s = PLAYER_SCALE();
+  ctx.save();
+  ctx.shadowBlur = ball.result === "HOME RUN!" ? 24 : 16;
+  ctx.shadowColor = ball.result === "HOME RUN!" ? "#ffd54f" : "#ffffff";
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, ball.size || BALL_RADIUS, 0, Math.PI * 2);
+  ctx.fill();
 
-    ctx.save();
-    ctx.shadowBlur = 22;
-    ctx.shadowColor = "#25A9FF";
+  ctx.strokeStyle = "#cfd8dc";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, (ball.size || BALL_RADIUS) - 2, 0.4, 2.4);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(ball.x, ball.y, (ball.size || BALL_RADIUS) - 2, 3.6, 5.7);
+  ctx.stroke();
+  ctx.restore();
+}
 
-    const torsoGrad = ctx.createLinearGradient(px, py - 140 * s, px, py + 40 * s);
-    torsoGrad.addColorStop(0, "#7CF3FF");
-    torsoGrad.addColorStop(1, "#00A6FF");
-    ctx.fillStyle = torsoGrad;
-    roundRect(ctx, px - 30 * s, py - 140 * s, 60 * s, 108 * s, 24 * s, true, false);
+// ---------- MINIMAP ----------
+function drawMiniMap() {
+  if (!miniMapCanvas || !miniCtx) return;
 
-    ctx.fillStyle = "#A66CFF";
-    ctx.beginPath();
-    ctx.arc(px, py - 175 * s, 28 * s, 0, Math.PI * 2);
-    ctx.fill();
+  miniCtx.clearRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
 
-    ctx.strokeStyle = "#39FF88";
-    ctx.lineWidth = 16 * s;
-    ctx.lineCap = "round";
+  miniCtx.fillStyle = "#0b2343";
+  miniCtx.fillRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
 
-    ctx.beginPath();
-    ctx.moveTo(px - 8 * s, py - 112 * s);
-    ctx.lineTo(px + 32 * s, py - 88 * s);
-    ctx.lineTo(px + 72 * s, py - 50 * s);
-    ctx.stroke();
+  miniCtx.strokeStyle = "rgba(255,255,255,0.18)";
+  miniCtx.lineWidth = 2;
+  miniCtx.strokeRect(1, 1, miniMapCanvas.width - 2, miniMapCanvas.height - 2);
 
-    ctx.beginPath();
-    ctx.moveTo(px - 12 * s, py - 112 * s);
-    ctx.lineTo(px - 40 * s, py - 82 * s);
-    ctx.lineTo(px - 64 * s, py - 44 * s);
-    ctx.stroke();
+  miniCtx.fillStyle = "rgba(255,255,255,0.06)";
+  miniCtx.fillRect(18, 55, miniMapCanvas.width - 36, 24);
 
-    ctx.beginPath();
-    ctx.moveTo(px - 8 * s, py - 32 * s);
-    ctx.lineTo(px - 18 * s, py + 34 * s);
-    ctx.lineTo(px - 30 * s, py + 108 * s);
-    ctx.stroke();
+  miniCtx.strokeStyle = "rgba(255,255,255,0.30)";
+  miniCtx.lineWidth = 4;
+  miniCtx.beginPath();
+  miniCtx.moveTo(miniMapCanvas.width - 24, 67);
+  miniCtx.lineTo(34, 67);
+  miniCtx.stroke();
 
-    ctx.beginPath();
-    ctx.moveTo(px + 8 * s, py - 32 * s);
-    ctx.lineTo(px + 22 * s, py + 34 * s);
-    ctx.lineTo(px + 38 * s, py + 108 * s);
-    ctx.stroke();
+  miniCtx.fillStyle = "#ffd54f";
+  miniCtx.beginPath();
+  miniCtx.arc(miniMapCanvas.width - 24, 67, 7, 0, Math.PI * 2);
+  miniCtx.fill();
 
-    ctx.shadowBlur = 14;
-    ctx.shadowColor = "#FFD43B";
-    ctx.strokeStyle = "#FFD43B";
-    ctx.lineWidth = 9 * s;
-    ctx.beginPath();
-    ctx.moveTo(px + 74 * s, py - 52 * s);
-    ctx.lineTo(px + 136 * s, py - 102 * s);
-    ctx.stroke();
+  if (ball) {
+    const bx = clamp((ball.x / canvas.width) * miniMapCanvas.width, 10, miniMapCanvas.width - 10);
+    const by = clamp((ball.y / canvas.height) * miniMapCanvas.height, 18, miniMapCanvas.height - 18);
 
-    ctx.restore();
-
-    if (swingFlash > 0.05) {
-      ctx.save();
-      ctx.globalAlpha = swingFlash * 0.30;
-      ctx.strokeStyle = "#FFD43B";
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.arc(px + 64 * s, py - 62 * s, 64 * s, -1.2, 0.3);
-      ctx.stroke();
-      ctx.restore();
-    }
+    miniCtx.fillStyle = "#ffffff";
+    miniCtx.beginPath();
+    miniCtx.arc(bx, by, 7, 0, Math.PI * 2);
+    miniCtx.fill();
   }
 
-  function drawBall() {
-    if (!ball) return;
+  miniCtx.fillStyle = "#dbeaff";
+  miniCtx.font = '900 12px "Nunito", sans-serif';
+  miniCtx.textAlign = "left";
+  miniCtx.fillText("Right-to-left", 12, 18);
+}
 
-    ctx.save();
+// ---------- ICONS / BADGE ----------
+function drawBaseballIcon(x, y, r, active = true) {
+  ctx.save();
+  ctx.globalAlpha = active ? 1 : 0.28;
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
 
-    if (ball.hit) {
-      ctx.globalAlpha = 0.18;
-      ctx.fillStyle = ball.result === "home_run" ? "#FFD43B" : "#ffffff";
-      ctx.beginPath();
-      ctx.arc(ball.x - 18, ball.y + 8, ball.radius * 0.9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(ball.x - 36, ball.y + 16, ball.radius * 0.7, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
+  ctx.strokeStyle = "#d64545";
+  ctx.lineWidth = 1.5;
 
-    ctx.shadowBlur = ball.result === "home_run" ? 22 : 10;
-    ctx.shadowColor = ball.result === "home_run" ? "#FFD43B" : "#ffffff";
+  ctx.beginPath();
+  ctx.arc(x - 3, y, r - 4, -1.1, 1.1);
+  ctx.stroke();
 
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath();
-    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-    ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x + 3, y, r - 4, 2.0, 4.2);
+  ctx.stroke();
 
-    ctx.strokeStyle = "#d7d7d7";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(ball.x, ball.y, ball.radius - 2, 0.45, 2.5);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(ball.x, ball.y, ball.radius - 2, 3.7, 5.8);
-    ctx.stroke();
+  ctx.restore();
+}
 
-    ctx.restore();
+function drawPitchIconsRow() {
+  const total = roundPitches;
+  const gap = 24;
+  const r = 8;
+  const rowWidth = (total - 1) * gap;
+  const startX = canvas.width / 2 - rowWidth / 2;
+  const y = canvas.height - 148;
+
+  for (let i = 0; i < total; i++) {
+    const active = i < pitchesLeft;
+    drawBaseballIcon(startX + i * gap, y, r, active);
   }
+}
 
-  function drawTopTitle() {
-    ctx.save();
-    ctx.fillStyle = "rgba(8,18,40,0.82)";
-    roundRect(ctx, 18, 16, 360, 62, 18, true, false);
+function drawBadge(cx, cy, label) {
+  ctx.save();
 
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "800 24px Arial";
-    ctx.fillText("BxCM JR. SLUGGERS", 30, 42);
+  ctx.beginPath();
+  ctx.arc(cx, cy, 64, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffd43b";
+  ctx.fill();
 
-    ctx.fillStyle = "rgba(255,255,255,0.82)";
-    ctx.font = "800 14px Arial";
-    ctx.fillText("Swing big. Make contact. Chase the high score.", 30, 60);
-    ctx.restore();
-  }
+  ctx.beginPath();
+  ctx.arc(cx, cy, 52, 0, Math.PI * 2);
+  ctx.fillStyle = "#25a9ff";
+  ctx.fill();
 
-  function drawBottomStats() {
-    const cards = [
-      { label: "Pitches", value: pitchesLeft, c1: "#FFD43B", c2: "#FFB300", dark: true },
-      { label: "Hits", value: hits, c1: "#25A9FF", c2: "#007AFF", dark: false },
-      { label: "Home Runs", value: homeRuns, c1: "#7D4DFF", c2: "#5F33FF", dark: false },
-      { label: "Best Hit", value: `${Math.round(bestDistance)} FT`, c1: "#2ED573", c2: "#14B45A", dark: true }
-    ];
+  ctx.beginPath();
+  ctx.arc(cx, cy, 40, 0, Math.PI * 2);
+  ctx.fillStyle = "#7d4dff";
+  ctx.fill();
 
-    const totalWidth = Math.min(width * 0.84, 820);
-    const gap = 12;
-    const cardW = (totalWidth - gap * 3) / 4;
-    const cardH = 82;
-    const startX = (width - totalWidth) / 2;
-    const y = height - 104;
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 16px "Baloo 2", sans-serif';
+  ctx.textAlign = "center";
+  ctx.fillText("BxCM", cx, cy - 8);
+  ctx.font = '900 12px "Nunito", sans-serif';
+  ctx.fillText(label, cx, cy + 14);
 
-    ctx.save();
+  ctx.restore();
+}
 
-    cards.forEach((c, i) => {
-      const x = startX + i * (cardW + gap);
-      const grad = ctx.createLinearGradient(x, y, x, y + cardH);
-      grad.addColorStop(0, c.c1);
-      grad.addColorStop(1, c.c2);
+// ---------- FX ----------
+function getShakeOffset() {
+  if (screenShakeTimer <= 0) return { x: 0, y: 0 };
+  screenShakeTimer--;
+  return {
+    x: (Math.random() - 0.5) * screenShakeAmount,
+    y: (Math.random() - 0.5) * screenShakeAmount
+  };
+}
 
-      ctx.fillStyle = grad;
-      roundRect(ctx, x, y, cardW, cardH, 20, true, false);
-
-      ctx.fillStyle = c.dark ? "#11213d" : "#ffffff";
-      ctx.font = "800 13px Arial";
-      ctx.fillText(c.label.toUpperCase(), x + 16, y + 24);
-
-      ctx.font = "800 30px Arial";
-      ctx.fillText(String(c.value), x + 16, y + 58);
+function spawnConfetti(x, y, count) {
+  for (let i = 0; i < count; i++) {
+    confetti.push({
+      x,
+      y,
+      vx: (Math.random() - 0.5) * 9,
+      vy: -Math.random() * 8 - 1.5,
+      size: 4 + Math.random() * 7,
+      life: 22 + Math.random() * 24,
+      color: ["#ff5252", "#ffd54f", "#66bb6a", "#42a5f5", "#ab47bc", "#ff7043"][i % 6]
     });
+  }
+}
 
-    ctx.restore();
+function spawnStars(x, y, label) {
+  const count = label === "HOME RUN!" ? 8 : 4;
+  for (let i = 0; i < count; i++) {
+    floatingStars.push({
+      x: x + (Math.random() - 0.5) * 20,
+      y: y + (Math.random() - 0.5) * 20,
+      vy: -1 - Math.random() * 1.2,
+      life: 24 + Math.random() * 10,
+      size: 10 + Math.random() * 10
+    });
+  }
+}
+
+function triggerHomeRunCelebration(x, y) {
+  screenShakeTimer = 28;
+  screenShakeAmount = 14;
+  flashTimer = 14;
+
+  for (let i = 0; i < 4; i++) {
+    homerBursts.push({
+      x: x + (Math.random() - 0.5) * 120,
+      y: y + (Math.random() - 0.5) * 80,
+      radius: 10,
+      life: 26 + i * 4,
+      color: ["#ffd54f", "#42a5f5", "#ff7043", "#66bb6a"][i % 4]
+    });
   }
 
-  function drawPitchIcons() {
-    const gap = 20;
-    const r = 7;
-    const totalW = (TOTAL_PITCHES - 1) * gap;
-    const startX = width / 2 - totalW / 2;
-    const y = height - 128;
+  spawnConfetti(x, y, 100);
+  spawnStars(x, y, "HOME RUN!");
+  spawnStars(x + 80, y - 40, "HOME RUN!");
+  spawnStars(x - 80, y - 20, "HOME RUN!");
+}
 
-    for (let i = 0; i < TOTAL_PITCHES; i++) {
-      const active = i < pitchesLeft;
-      ctx.save();
-      ctx.globalAlpha = active ? 1 : 0.24;
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath();
-      ctx.arc(startX + i * gap, y, r, 0, Math.PI * 2);
-      ctx.fill();
+function updateAndDrawConfetti() {
+  for (let i = confetti.length - 1; i >= 0; i--) {
+    const p = confetti[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.20;
+    p.life--;
 
-      ctx.strokeStyle = "#d64545";
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.arc(startX + i * gap - 2.5, y, r - 3.5, -1.1, 1.1);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(startX + i * gap + 2.5, y, r - 3.5, 2.0, 4.2);
-      ctx.stroke();
-      ctx.restore();
-    }
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x, p.y, p.size, p.size * 0.7);
+
+    if (p.life <= 0) confetti.splice(i, 1);
+  }
+}
+
+function drawStar(x, y, r, color) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+
+  for (let i = 0; i < 5; i++) {
+    const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
+    const sx = Math.cos(a) * r;
+    const sy = Math.sin(a) * r;
+    if (i === 0) ctx.moveTo(sx, sy);
+    else ctx.lineTo(sx, sy);
+    const a2 = a + Math.PI / 5;
+    ctx.lineTo(Math.cos(a2) * r * 0.45, Math.sin(a2) * r * 0.45);
   }
 
-  function drawInstructionChip() {
-    const text = paused
-      ? "Paused — press Space to continue"
-      : gameOver
-        ? "Press R to return to splash"
-        : "Click / tap to swing • Space to pause";
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function updateAndDrawStars() {
+  for (let i = floatingStars.length - 1; i >= 0; i--) {
+    const s = floatingStars[i];
+    s.y += s.vy;
+    s.life--;
+    drawStar(s.x, s.y, s.size * 0.5, "rgba(255, 213, 79, 0.9)");
+    if (s.life <= 0) floatingStars.splice(i, 1);
+  }
+}
+
+function updateAndDrawHomerBursts() {
+  for (let i = homerBursts.length - 1; i >= 0; i--) {
+    const b = homerBursts[i];
+    b.radius += 10;
+    b.life--;
 
     ctx.save();
-    ctx.font = "800 16px Arial";
-    const tw = ctx.measureText(text).width + 34;
-    const th = 36;
-    const x = width / 2 - tw / 2;
-    const y = height - 30;
-
-    ctx.fillStyle = "rgba(8,18,40,0.86)";
-    roundRect(ctx, x, y, tw, th, 999, true, false);
-
-    ctx.fillStyle = "#ffffff";
-    ctx.fillText(text, x + 17, y + 24);
-    ctx.restore();
-  }
-
-  function drawThermometer() {
-    const x = width - 58;
-    const y = height * 0.22;
-    const w = 20;
-    const h = 190;
-    const bulbR = 14;
-
-    const ratio = clamp(displayDistance / 240, 0, 1);
-    const fillH = h * ratio;
-    const fillY = y + h - fillH;
-
-    ctx.save();
-
-    ctx.fillStyle = "rgba(10,20,40,0.72)";
-    roundRect(ctx, x, y, w, h, 12, true, false);
-
-    const grad = ctx.createLinearGradient(0, y + h, 0, y);
-    grad.addColorStop(0, "#25A9FF");
-    grad.addColorStop(0.55, "#7D4DFF");
-    grad.addColorStop(1, "#FFD43B");
-
-    ctx.fillStyle = grad;
-    roundRect(ctx, x + 3, fillY, w - 6, fillH, 10, true, false);
-
+    ctx.strokeStyle = b.color;
+    ctx.lineWidth = 6;
+    ctx.globalAlpha = Math.max(b.life / 30, 0);
     ctx.beginPath();
-    ctx.arc(x + w / 2, y + h + 14, bulbR, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.strokeStyle = "rgba(255,255,255,0.28)";
-    ctx.lineWidth = 2;
-    roundRect(ctx, x, y, w, h, 12, false, true);
-    ctx.beginPath();
-    ctx.arc(x + w / 2, y + h + 14, bulbR, 0, Math.PI * 2);
+    ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
     ctx.stroke();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "800 10px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText("HIT", x + w / 2, y - 10);
-    ctx.fillText("DIST", x + w / 2, y + h + 34);
-
     ctx.restore();
-  }
 
-  function drawMessages(now) {
-    if (!isMessageVisible(now)) return;
+    if (b.life <= 0) homerBursts.splice(i, 1);
+  }
+}
+
+function updateAndDrawHomerTrailParticles() {
+  for (let i = homerTrailParticles.length - 1; i >= 0; i--) {
+    const p = homerTrailParticles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
 
     ctx.save();
+    ctx.globalAlpha = Math.max(p.life / 24, 0);
+    ctx.fillStyle = p.color;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    if (p.life <= 0) homerTrailParticles.splice(i, 1);
+  }
+}
+
+function drawHitOverlay() {
+  if (hitTextTimer > 0) {
+    const alpha = Math.min(1, hitTextTimer / 24);
+    const scale = 1 + Math.sin((90 - hitTextTimer) * 0.10) * 0.03;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(canvas.width / 2, canvas.height * 0.22);
+    ctx.scale(scale, scale);
+
     ctx.textAlign = "center";
+    ctx.lineWidth = 9;
+    ctx.strokeStyle = "#14304b";
+    ctx.fillStyle = hitText.includes("HOME RUN!") ? "#ffd54f" : "#ffffff";
+    ctx.font = '900 56px "Baloo 2", sans-serif';
+    ctx.strokeText(hitText, 0, 0);
+    ctx.fillText(hitText, 0, 0);
+    ctx.restore();
 
-    let alpha = 1;
-    const remaining = messageUntil - now;
-    if (remaining < 600) alpha = remaining / 600;
+    hitTextTimer--;
+  }
 
-    ctx.globalAlpha = clamp(alpha, 0, 1);
+  if (timingTextTimer > 0) {
+    const alpha = Math.min(1, timingTextTimer / 24);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.textAlign = "center";
     ctx.lineWidth = 7;
     ctx.strokeStyle = "#14304b";
 
-    ctx.fillStyle = currentMessage.includes("HOME RUN") ? "#FFD43B" : "#ffffff";
-    ctx.font = "800 54px Arial";
-    ctx.strokeText(currentMessage, width / 2, height * 0.18);
-    ctx.fillText(currentMessage, width / 2, height * 0.18);
+    let fill = "#ffffff";
+    if (timingText === "PERFECT!") fill = "#2ed573";
+    if (timingText === "TOO EARLY" || timingText === "TOO LATE") fill = "#ff9f1a";
 
-    if (currentSubMessage) {
-      ctx.fillStyle = "#25A9FF";
-      ctx.font = "800 28px Arial";
-      ctx.strokeText(currentSubMessage, width / 2, height * 0.25);
-      ctx.fillText(currentSubMessage, width / 2, height * 0.25);
-    }
+    ctx.fillStyle = fill;
+    ctx.font = '900 38px "Baloo 2", sans-serif';
+    ctx.strokeText(timingText, canvas.width / 2, canvas.height * 0.30);
+    ctx.fillText(timingText, canvas.width / 2, canvas.height * 0.30);
+    ctx.restore();
 
+    timingTextTimer--;
+  }
+
+  if (flashTimer > 0) {
+    ctx.fillStyle = `rgba(255,255,255,${flashTimer * 0.020})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    flashTimer--;
+  }
+}
+
+function drawDistanceOverlay() {
+  if (gameState === "playing" && ball && ball.hit && currentDistanceFt > 0) {
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = "#14304b";
+    ctx.fillStyle = "#ffd43b";
+    ctx.font = '900 42px "Baloo 2", sans-serif';
+    ctx.strokeText(`${Math.round(currentDistanceFt)} FT`, canvas.width / 2, canvas.height * 0.14);
+    ctx.fillText(`${Math.round(currentDistanceFt)} FT`, canvas.width / 2, canvas.height * 0.14);
     ctx.restore();
   }
 
-  function drawSummary() {
-    if (!summaryReady) return;
-
+  if (distanceTextTimer > 0) {
+    const alpha = Math.min(1, distanceTextTimer / 24);
     ctx.save();
-    ctx.fillStyle = "rgba(0,0,0,0.38)";
-    ctx.fillRect(0, 0, width, height);
-
+    ctx.globalAlpha = alpha;
     ctx.textAlign = "center";
-    ctx.fillStyle = "#FFD43B";
-    ctx.font = "800 56px Arial";
-    ctx.fillText(currentMessage, width / 2, height * 0.36);
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = "#14304b";
+    ctx.fillStyle = "#25a9ff";
+    ctx.font = '900 34px "Baloo 2", sans-serif';
+    ctx.strokeText(distanceText, canvas.width / 2, canvas.height * 0.36);
+    ctx.fillText(distanceText, canvas.width / 2, canvas.height * 0.36);
+    ctx.restore();
+
+    distanceTextTimer--;
+  }
+}
+
+function drawMissOverlay() {
+  if (missTextTimer <= 0) return;
+
+  const alpha = Math.min(1, missTextTimer / 24);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = "center";
+  ctx.lineWidth = 7;
+  ctx.strokeStyle = "#14304b";
+  ctx.fillStyle = "#ff9f1a";
+  ctx.font = '900 38px "Baloo 2", sans-serif';
+  ctx.strokeText(missText, canvas.width / 2, canvas.height * 0.32);
+  ctx.fillText(missText, canvas.width / 2, canvas.height * 0.32);
+  ctx.restore();
+
+  missTextTimer--;
+}
+
+function drawRoundCompleteOverlay() {
+  if (!showRoundComplete) return;
+
+  const alpha = Math.min(1, roundCompleteTimer / 24);
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = "center";
+  ctx.shadowBlur = 30;
+  ctx.shadowColor = "#ffd43b";
+  ctx.fillStyle = "#ffd43b";
+  ctx.strokeStyle = "#14304b";
+  ctx.lineWidth = 10;
+  ctx.font = '900 72px "Baloo 2", sans-serif';
+  ctx.strokeText("ROUND COMPLETE", canvas.width / 2, canvas.height * 0.46);
+  ctx.fillText("ROUND COMPLETE", canvas.width / 2, canvas.height * 0.46);
+  ctx.restore();
+
+  if (roundCompleteTimer > 0) roundCompleteTimer--;
+}
+
+function drawPauseOverlay() {
+  ctx.fillStyle = "rgba(0,0,0,0.26)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffd54f";
+  ctx.font = '900 64px "Baloo 2", sans-serif';
+  ctx.fillText("PAUSED", canvas.width / 2, canvas.height * 0.35);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 28px "Nunito", sans-serif';
+  ctx.fillText("Press Space or Pause again to keep playing.", canvas.width / 2, canvas.height * 0.43);
+}
+
+function drawStartOverlay() {
+  ctx.fillStyle = "rgba(0,0,0,0.20)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffd54f";
+  ctx.font = '900 60px "Baloo 2", sans-serif';
+  ctx.fillText("PRESS START", canvas.width / 2, canvas.height * 0.33);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 28px "Nunito", sans-serif';
+  ctx.fillText("Press the button to begin.", canvas.width / 2, canvas.height * 0.41);
+}
+
+function drawSummaryOverlay() {
+  if (!roundSummary) return;
+
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  drawBadge(canvas.width / 2, canvas.height * 0.24, roundSummary.badge);
+
+  ctx.save();
+  ctx.textAlign = "center";
+
+  ctx.fillStyle = "#ffd43b";
+  ctx.font = '900 54px "Baloo 2", sans-serif';
+  ctx.fillText(roundSummary.title, canvas.width / 2, canvas.height * 0.40);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 28px "Nunito", sans-serif';
+  ctx.fillText(roundSummary.message, canvas.width / 2, canvas.height * 0.50);
+
+  ctx.font = '800 24px "Nunito", sans-serif';
+  ctx.fillStyle = "#25a9ff";
+  ctx.fillText(`Best Distance: ${Math.round(bestDistanceFt)} FT`, canvas.width / 2, canvas.height * 0.58);
+
+  ctx.fillStyle = "#2ed573";
+  ctx.fillText(`Hits: ${hits}   •   Home Runs: ${homeRuns}`, canvas.width / 2, canvas.height * 0.65);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '800 22px "Nunito", sans-serif';
+  ctx.fillText(roundSummary.tip, canvas.width / 2, canvas.height * 0.75);
+
+  ctx.fillStyle = "rgba(255,255,255,0.86)";
+  ctx.font = '800 18px "Nunito", sans-serif';
+  ctx.fillText("Administrator: press Reset to return to splash.", canvas.width / 2, canvas.height * 0.85);
+
+  ctx.restore();
+}
+
+function drawCountdownOverlay() {
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffd54f";
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = "#14304b";
+
+  if (countdownValue > 0) {
+    ctx.font = '900 120px "Baloo 2", sans-serif';
+    ctx.strokeText(String(countdownValue), canvas.width / 2, canvas.height * 0.45);
+    ctx.fillText(String(countdownValue), canvas.width / 2, canvas.height * 0.45);
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "800 22px Arial";
-    ctx.fillText(`Score: ${score}`, width / 2, height * 0.48);
-    ctx.fillText(`Hits: ${hits}`, width / 2, height * 0.54);
-    ctx.fillText(`Home Runs: ${homeRuns}`, width / 2, height * 0.60);
-    ctx.fillText(`Best Hit: ${Math.round(bestDistance)} FT`, width / 2, height * 0.66);
+    ctx.font = '900 28px "Nunito", sans-serif';
+    ctx.fillText("Get set...", canvas.width / 2, canvas.height * 0.55);
+  } else {
+    ctx.font = '900 90px "Baloo 2", sans-serif';
+    ctx.strokeText("SWING!", canvas.width / 2, canvas.height * 0.45);
+    ctx.fillText("SWING!", canvas.width / 2, canvas.height * 0.45);
+  }
+}
 
-    ctx.fillStyle = "#25A9FF";
-    ctx.font = "800 18px Arial";
-    ctx.fillText("Press R to return to splash", width / 2, height * 0.78);
-    ctx.restore();
+function drawCoachOverlay() {
+  if (coachTextTimer <= 0) return;
+
+  const alpha = Math.min(1, coachTextTimer / 20);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = "rgba(10,18,38,0.78)";
+  ctx.beginPath();
+  ctx.roundRect(canvas.width * 0.60, canvas.height * 0.12, 300, 56, 18);
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 18px "Nunito", sans-serif';
+  ctx.textAlign = "left";
+  ctx.fillText(coachText, canvas.width * 0.60 + 18, canvas.height * 0.12 + 34);
+  ctx.restore();
+
+  coachTextTimer--;
+}
+
+function drawCrowdOverlay() {
+  if (crowdTextTimer <= 0) return;
+
+  const alpha = Math.min(1, crowdTextTimer / 16);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = "center";
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = "#14304b";
+  ctx.fillStyle = crowdMood === "boo" ? "#ff9f1a" : "#ffd43b";
+  ctx.font = '900 28px "Baloo 2", sans-serif';
+  ctx.strokeText(crowdText, canvas.width * 0.18, canvas.height * 0.20);
+  ctx.fillText(crowdText, canvas.width * 0.18, canvas.height * 0.20);
+  ctx.restore();
+
+  crowdTextTimer--;
+}
+
+// ---------- COUNTDOWN ----------
+function startCountdown() {
+  clearCountdownTimer();
+  countdownActive = true;
+  countdownValue = 5;
+  gameState = "countdown";
+
+  if (instructionChip) {
+    instructionChip.textContent = "Get set...";
   }
 
-  function render(now) {
-    update();
-    drawBackground();
+  hideControlsPanel();
+  fadeOutIntroMusic(1800);
 
-    if (gameStarted) {
-      drawPlayer();
-      drawBall();
-      drawParticles();
-      drawTopTitle();
-      drawThermometer();
-      drawBottomStats();
-      drawPitchIcons();
-      drawInstructionChip();
-      drawMessages(now);
+  const tick = () => {
+    if (!countdownActive) return;
 
-      if (paused && !gameOver) {
-        ctx.save();
-        ctx.fillStyle = "rgba(0,0,0,0.30)";
-        ctx.fillRect(0, 0, width, height);
-        ctx.fillStyle = "#FFD43B";
-        ctx.font = "800 66px Arial";
-        ctx.textAlign = "center";
-        ctx.fillText("PAUSED", width / 2, height * 0.42);
-        ctx.restore();
+    if (countdownValue > 0) {
+      playCountdownBeep(countdownValue);
+      if (instructionChip) {
+        instructionChip.textContent = `Starting in ${countdownValue}...`;
       }
+      countdownValue--;
+      countdownTimer = setTimeout(tick, 1000);
+    } else {
+      playGoSound();
+      if (instructionChip) {
+        instructionChip.textContent = "Swing!";
+      }
+      countdownActive = false;
+      gameState = "playing";
+      startAmbientCrowd();
+      createPitch();
+    }
+  };
 
-      if (gameOver) drawSummary();
+  tick();
+}
+
+// ---------- CAMERA / MODEL ----------
+async function setupCamera() {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: "user",
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    },
+    audio: false
+  });
+
+  video.srcObject = stream;
+
+  await new Promise(resolve => {
+    video.onloadedmetadata = () => resolve();
+  });
+
+  await video.play();
+  resizeCanvas();
+}
+
+async function loadModel() {
+  await tf.ready();
+  detector = await poseDetection.createDetector(
+    poseDetection.SupportedModels.MoveNet,
+    { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
+  );
+}
+
+// ---------- SIDE SELECT ----------
+function updateSideButtons() {
+  if (battingSide === "right") {
+    if (rightHandBtn) rightHandBtn.classList.add("active");
+    if (leftHandBtn) leftHandBtn.classList.remove("active");
+  } else {
+    if (leftHandBtn) leftHandBtn.classList.add("active");
+    if (rightHandBtn) rightHandBtn.classList.remove("active");
+  }
+}
+
+if (rightHandBtn) {
+  rightHandBtn.onclick = () => {
+    battingSide = "right";
+    prevBatPoint = null;
+    updateSideButtons();
+  };
+}
+
+if (leftHandBtn) {
+  leftHandBtn.onclick = () => {
+    battingSide = "left";
+    prevBatPoint = null;
+    updateSideButtons();
+  };
+}
+
+// ---------- RESET ROUND ----------
+function resetRound() {
+  clearPitchTimer();
+  clearCountdownTimer();
+  clearSummaryTimer();
+
+  score = 0;
+  hits = 0;
+  misses = 0;
+  homeRuns = 0;
+  bestDistanceFt = 0;
+  currentDistanceFt = 0;
+  pitchesLeft = roundPitches;
+
+  prevBatPoint = null;
+  batVelocity = { x: 0, y: 0, speed: 0 };
+  lastBatTip = null;
+  ball = null;
+
+  hitText = "";
+  hitTextTimer = 0;
+  timingText = "";
+  timingTextTimer = 0;
+  distanceText = "";
+  distanceTextTimer = 0;
+  missText = "";
+  missTextTimer = 0;
+
+  coachText = "";
+  coachTextTimer = 0;
+  crowdText = "";
+  crowdTextTimer = 0;
+  crowdMood = "quiet";
+
+  accuracyMarkerTimer = 0;
+  lastTimingOffset = 0.5;
+  lastTimingRating = "";
+
+  swingPowerDisplay = 0;
+  swingPowerPeak = 0;
+
+  flashTimer = 0;
+
+  confetti = [];
+  floatingStars = [];
+  homerBursts = [];
+  homerTrailParticles = [];
+  batTrail = [];
+
+  screenShakeTimer = 0;
+  screenShakeAmount = 0;
+
+  countdownActive = false;
+  countdownValue = 5;
+  roundSummary = null;
+  showRoundComplete = false;
+  roundCompleteTimer = 0;
+
+  CONTACT_DISTANCE = DIFFICULTIES[difficulty].contactDistance;
+
+  updateHud();
+
+  if (instructionChip) {
+    instructionChip.textContent = "Strong swings can send the ball farther. Timing matters too.";
+  }
+
+  showControlsPanel();
+}
+
+// ---------- MAIN LOOP ----------
+async function loop() {
+  const shake = getShakeOffset();
+
+  ctx.save();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.translate(shake.x, shake.y);
+
+  drawBackground();
+  drawMiniMap();
+
+  let pose = null;
+
+  if (detector && (gameState === "playing" || gameState === "countdown" || gameState === "start")) {
+    const poses = await detector.estimatePoses(video, { flipHorizontal: true });
+    pose = poses[0] || null;
+  }
+
+  if (pose) {
+    const points = drawSilhouetteFigure(pose);
+    const battingArm = getBattingArm(points);
+
+    if (battingArm) {
+      const batTip = drawBatFromSide(battingArm.wrist, battingArm.elbow);
+      if (batTip) {
+        updateBatVelocity(batTip);
+        updateBatTrail(batTip);
+
+        if (gameState === "playing") {
+          tryHit(batTip);
+        }
+      }
+    }
+  }
+
+  drawAccuracyMeter();
+  drawSwingPowerMeter();
+  drawBatTrail();
+
+  if (gameState === "playing") {
+    updateBall();
+    updateDistanceDuringFlight();
+    drawBall();
+    updateAndDrawConfetti();
+    updateAndDrawStars();
+    updateAndDrawHomerBursts();
+    updateAndDrawHomerTrailParticles();
+    drawHitOverlay();
+    drawDistanceOverlay();
+    drawMissOverlay();
+    drawPitchIconsRow();
+  } else {
+    updateAndDrawConfetti();
+    updateAndDrawStars();
+    updateAndDrawHomerBursts();
+    updateAndDrawHomerTrailParticles();
+    drawHitOverlay();
+    drawDistanceOverlay();
+    drawMissOverlay();
+
+    if (gameState === "summary" || gameState === "round_complete") {
+      drawPitchIconsRow();
+    }
+  }
+
+  drawCoachOverlay();
+  drawCrowdOverlay();
+  tickBatTrail();
+
+  if (gameState === "start") {
+    drawStartOverlay();
+  }
+
+  if (gameState === "countdown") {
+    drawCountdownOverlay();
+  }
+
+  if (gameState === "paused") {
+    drawPauseOverlay();
+  }
+
+  if (gameState === "round_complete") {
+    drawRoundCompleteOverlay();
+  }
+
+  if (gameState === "summary") {
+    drawSummaryOverlay();
+  }
+
+  ctx.restore();
+  animationId = requestAnimationFrame(loop);
+}
+
+// ---------- BUTTONS ----------
+async function startOrResumeGame() {
+  try {
+    initAudio();
+
+    if (!introMusicStarted) {
+      await playIntroMusic();
     }
 
-    requestAnimationFrame(render);
+    if (!detector) {
+      await setupCamera();
+      await loadModel();
+    }
+
+    hideSplashScreen();
+
+    if (gameState === "paused") {
+      gameState = "playing";
+      if (pauseBtn) pauseBtn.textContent = "Pause";
+      if (instructionChip) instructionChip.textContent = "Game resumed.";
+      hideControlsPanel();
+      startAmbientCrowd();
+      if (!ball) scheduleNextPitch();
+      playStartSound();
+      if (!animationId) loop();
+      return;
+    }
+
+    resetRound();
+    if (pauseBtn) pauseBtn.textContent = "Pause";
+    playStartSound();
+    startCountdown();
+
+    if (!animationId) {
+      loop();
+    }
+  } catch (err) {
+    console.error("START ERROR:", err);
+    alert("Start failed: " + err.message);
+  }
+}
+
+function togglePause() {
+  if (gameState === "playing") {
+    gameState = "paused";
+    if (pauseBtn) pauseBtn.textContent = "Resume";
+    clearPitchTimer();
+    clearCountdownTimer();
+    stopAmbientCrowd();
+    showControlsPanel();
+    if (instructionChip) instructionChip.textContent = "Game paused.";
+    return;
   }
 
-  requestAnimationFrame(render);
+  if (gameState === "countdown") {
+    gameState = "paused";
+    countdownActive = false;
+    clearCountdownTimer();
+    stopAmbientCrowd();
+    if (pauseBtn) pauseBtn.textContent = "Resume";
+    showControlsPanel();
+    if (instructionChip) instructionChip.textContent = "Game paused.";
+    return;
+  }
 
-  function roundRect(context, x, y, w, h, r, fill, stroke) {
-    if (w <= 0 || h <= 0) return;
-    const radius = Math.min(r, w / 2, h / 2);
+  if (gameState === "paused") {
+    if (pauseBtn) pauseBtn.textContent = "Pause";
 
-    context.beginPath();
-    context.moveTo(x + radius, y);
-    context.lineTo(x + w - radius, y);
-    context.quadraticCurveTo(x + w, y, x + w, y + radius);
-    context.lineTo(x + w, y + h - radius);
-    context.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
-    context.lineTo(x + radius, y + h);
-    context.quadraticCurveTo(x, y + h, x, y + h - radius);
-    context.lineTo(x, y + radius);
-    context.quadraticCurveTo(x, y, x + radius, y);
-    context.closePath();
+    if (!ball && hits === 0 && misses === 0 && pitchesLeft === roundPitches) {
+      startCountdown();
+    } else {
+      gameState = "playing";
+      hideControlsPanel();
+      startAmbientCrowd();
+      if (instructionChip) instructionChip.textContent = "Game resumed.";
+      if (!ball) scheduleNextPitch();
+      playStartSound();
+    }
+  }
+}
 
-    if (fill) context.fill();
-    if (stroke) context.stroke();
+function resetGame() {
+  clearPitchTimer();
+  clearCountdownTimer();
+  clearSummaryTimer();
+  stopAmbientCrowd();
+
+  if (introMusic && !introMusic.paused) {
+    introMusic.pause();
+    introMusic.currentTime = 0;
+  }
+
+  if (homeRunMusic && !homeRunMusic.paused) {
+    homeRunMusic.pause();
+    homeRunMusic.currentTime = 0;
+  }
+
+  resetRound();
+  gameState = "start";
+  showSplashScreen();
+  if (pauseBtn) pauseBtn.textContent = "Pause";
+  if (instructionChip) {
+    instructionChip.textContent = "Strong swings can send the ball farther. Timing matters too.";
+  }
+}
+
+// ---------- INIT ----------
+if (startBtn) {
+  startBtn.onclick = startOrResumeGame;
+}
+
+if (splashStartBtn) {
+  splashStartBtn.onclick = startOrResumeGame;
+}
+
+if (pauseBtn) {
+  pauseBtn.onclick = togglePause;
+}
+
+if (resetBtn) {
+  resetBtn.onclick = resetGame;
+}
+
+if (muteBtn) {
+  muteBtn.onclick = async () => {
+    soundEnabled = !soundEnabled;
+
+    if (soundEnabled) {
+      initAudio();
+      muteBtn.textContent = "Sound: On";
+      playStartSound();
+    } else {
+      muteBtn.textContent = "Sound: Off";
+      stopAmbientCrowd();
+      if (introMusic && !introMusic.paused) introMusic.pause();
+      if (homeRunMusic && !homeRunMusic.paused) homeRunMusic.pause();
+    }
+  };
+}
+
+window.addEventListener("keydown", (e) => {
+  if (e.code === "Space") {
+    e.preventDefault();
+
+    if (gameState === "playing" || gameState === "countdown") {
+      togglePause();
+    } else if (gameState === "paused") {
+      togglePause();
+    }
   }
 });
+
+updateSideButtons();
+updateHud();
+resizeCanvas();
+
+if (pitchDelayVal && pitchDelaySlider) {
+  pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
+}
