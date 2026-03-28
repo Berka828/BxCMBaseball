@@ -618,5 +618,113 @@ body{background:#000}
   .bottomStatCard{ min-width:140px; }
   .controlDock{ width:min(92vw,340px); }
   .educationalBar{ width:min(92vw,680px); bottom:18px; }
-  .lowerMiniMap{ right:14px; top:88px; }
+
+  .lowerMiniMap{
+    right:14px;
+    top:88px;
+  }
+}
+
+@media (max-width: 640px){
+  .compactTopBar{
+    top:10px;
+    left:10px;
+    right:10px;
+    gap:10px;
+    align-items:flex-start;
+    flex-direction:column;
+  }
+
+  .brandChip{
+    padding:10px 12px;
+  }
+
+  .brandLogo{
+    height:32px;
+  }
+
+  .compactTitleChip{
+    width:100%;
+    padding:10px 14px;
+  }
+
+  .titleMain{
+    font-size:clamp(18px,6vw,26px);
+  }
+
+  .titleSub{
+    font-size:clamp(11px,3.5vw,14px);
+  }
+
+  .controlDock{
+    right:10px;
+    left:10px;
+    top:auto;
+    bottom:10px;
+    width:auto;
+    max-width:none;
+    z-index:80;
+  }
+
+  .bottomStatsBar{
+    bottom:170px;
+    width:min(96vw,540px);
+    gap:8px;
+  }
+
+  .bottomStatCard{
+    min-width:calc(50% - 6px);
+    padding:10px 12px 12px;
+    border-radius:18px;
+  }
+
+  .bottomStatValue{
+    font-size:clamp(22px,6vw,34px);
+  }
+
+  .educationalBar{
+    width:min(94vw,540px);
+    bottom:128px;
+  }
+
+  .instructionChip{
+    font-size:13px;
+    padding:10px 14px;
+  }
+
+  .lowerMiniMap{
+    right:10px;
+    top:82px;
+  }
+
+  .miniMapCard{
+    width:170px;
+    padding:8px;
+    border-radius:14px;
+  }
+
+  .miniMapTitle{
+    font-size:11px;
+    margin-bottom:6px;
+  }
+
+  .splashInner{
+    width:min(96vw,1200px);
+    padding:18px;
+    gap:18px;
+  }
+
+  .splashPosterWrap{
+    width:min(96vw,980px);
+    border-radius:20px;
+  }
+
+  .splashStartBtn{
+    padding:16px 28px;
+    font-size:clamp(20px,6vw,30px);
+  }
+
+  .splashHint{
+    font-size:13px;
+  }
 }
