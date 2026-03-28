@@ -1,11 +1,3 @@
-// ================================
-// BxCM Baseball - Full game.js
-// Matches index.html with:
-// - #splash
-// - #startBtn
-// - #gameCanvas
-// ================================
-
 window.addEventListener("DOMContentLoaded", () => {
   const splash = document.getElementById("splash");
   const startBtn = document.getElementById("startBtn");
@@ -13,13 +5,10 @@ window.addEventListener("DOMContentLoaded", () => {
   const ctx = canvas.getContext("2d");
 
   if (!splash || !startBtn || !canvas) {
-    console.error("Missing required DOM elements: #splash, #startBtn, or #gameCanvas");
+    console.error("Missing required DOM elements.");
     return;
   }
 
-  // ================================
-  // CANVAS
-  // ================================
   let width = 0;
   let height = 0;
 
@@ -31,9 +20,6 @@ window.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("resize", resizeCanvas);
   resizeCanvas();
 
-  // ================================
-  // GAME STATE
-  // ================================
   const TOTAL_PITCHES = 5;
 
   let gameStarted = false;
@@ -60,39 +46,13 @@ window.addEventListener("DOMContentLoaded", () => {
   let targetDistance = 0;
   let bestDistance = 0;
 
-  let lastSwingTime = 0;
   let swingFlash = 0;
-
   let particles = [];
   let homeRunGlow = 0;
 
-  // Fake player / silhouette placement
   const PLAYER_X = () => width * 0.22;
   const PLAYER_Y = () => height * 0.76;
   const PLAYER_SCALE = () => Math.min(width, height) * 0.00105;
-
-  // Hittable pitch zone: stomach to mid-thigh
-  function getPitchZoneTop() {
-    return height * 0.58;
-  }
-
-  function getPitchZoneBottom() {
-    return height * 0.72;
-  }
-
-  function getRandomPitchY() {
-    return getPitchZoneTop() + Math.random() * (getPitchZoneBottom() - getPitchZoneTop());
-  }
-
-  // ================================
-  // HELPERS
-  // ================================
-  function clearNextPitchTimer() {
-    if (nextPitchTimer) {
-      clearTimeout(nextPitchTimer);
-      nextPitchTimer = null;
-    }
-  }
 
   function clamp(v, min, max) {
     return Math.max(min, Math.min(max, v));
@@ -100,6 +60,13 @@ window.addEventListener("DOMContentLoaded", () => {
 
   function rand(min, max) {
     return Math.random() * (max - min) + min;
+  }
+
+  function clearNextPitchTimer() {
+    if (nextPitchTimer) {
+      clearTimeout(nextPitchTimer);
+      nextPitchTimer = null;
+    }
   }
 
   function showMessage(title, subtitle = "", duration = 3200) {
@@ -110,6 +77,18 @@ window.addEventListener("DOMContentLoaded", () => {
 
   function isMessageVisible(now) {
     return now < messageUntil;
+  }
+
+  function getPitchZoneTop() {
+    return height * 0.58;
+  }
+
+  function getPitchZoneBottom() {
+    return height * 0.72;
+  }
+
+  function getRandomPitchY() {
+    return getPitchZoneTop() + Math.random() * (getPitchZoneBottom() - getPitchZoneTop());
   }
 
   function resetRound() {
@@ -139,9 +118,6 @@ window.addEventListener("DOMContentLoaded", () => {
     gameOver = false;
   }
 
-  // ================================
-  // START / RESET
-  // ================================
   function startGame() {
     resetRound();
     gameStarted = true;
@@ -159,9 +135,6 @@ window.addEventListener("DOMContentLoaded", () => {
     startGame();
   });
 
-  // ================================
-  // COUNTDOWN
-  // ================================
   function startCountdown() {
     countdownActive = true;
     countdownValue = 5;
@@ -186,9 +159,6 @@ window.addEventListener("DOMContentLoaded", () => {
     tick();
   }
 
-  // ================================
-  // BALL
-  // ================================
   function createPitch() {
     if (!gameStarted || gameOver || paused) return;
     if (pitchesLeft <= 0) {
@@ -278,14 +248,9 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // ================================
-  // SWING / HIT
-  // For now this uses click/tap/space as swing
-  // ================================
   function swing() {
     if (!gameStarted || gameOver || paused || countdownActive) return;
 
-    lastSwingTime = performance.now();
     swingFlash = 1;
 
     if (!ball || ball.hit) return;
@@ -294,20 +259,17 @@ window.addEventListener("DOMContentLoaded", () => {
     const dx = Math.abs(ball.x - contactX);
     const dy = ball.y - (PLAYER_Y() - 70);
 
-    // too late if ball already passed hitter
     if (ball.x < PLAYER_X() + 60) {
       resolveMiss("Too late");
       return;
     }
 
-    // height feedback
     if (Math.abs(dy) > 120) {
       if (dy < 0) resolveMiss("Swing too high");
       else resolveMiss("Swing too low");
       return;
     }
 
-    // timing windows
     if (dx < 26) {
       ball.hit = true;
       ball.vx = rand(10, 13);
@@ -342,41 +304,30 @@ window.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("click", swing);
   window.addEventListener("touchstart", swing, { passive: true });
 
-  // ================================
-  // KEYBOARD
-  // ================================
   window.addEventListener("keydown", (e) => {
     if (e.code === "Space") {
       e.preventDefault();
 
       if (!gameStarted) return;
-
       if (gameOver) return;
-
       if (countdownActive) return;
 
       paused = !paused;
+
       if (!paused && !ball && pitchesLeft > 0) {
         scheduleNextPitch(500);
       }
     }
 
     if (e.code === "Enter") {
-      if (!gameStarted) {
-        startGame();
-      }
+      if (!gameStarted) startGame();
     }
 
     if (e.code === "KeyR") {
-      if (gameOver) {
-        returnToSplash();
-      }
+      if (gameOver) returnToSplash();
     }
   });
 
-  // ================================
-  // END GAME
-  // ================================
   function endGame() {
     gameOver = true;
     paused = false;
@@ -386,22 +337,14 @@ window.addEventListener("DOMContentLoaded", () => {
     let title = "Great Job!";
     let subtitle = `Hits: ${hits} • Home Runs: ${homeRuns} • Best: ${Math.round(bestDistance)} FT`;
 
-    if (homeRuns >= 2) {
-      title = "Home Run Hero!";
-    } else if (bestDistance >= 160) {
-      title = "Rocket Hitter!";
-    } else if (hits >= 3) {
-      title = "Nice Swinging!";
-    } else if (hits === 0) {
-      title = "Keep Practicing!";
-    }
+    if (homeRuns >= 2) title = "Home Run Hero!";
+    else if (bestDistance >= 160) title = "Rocket Hitter!";
+    else if (hits >= 3) title = "Nice Swinging!";
+    else if (hits === 0) title = "Keep Practicing!";
 
     showMessage(title, subtitle, 999999);
   }
 
-  // ================================
-  // PARTICLES
-  // ================================
   function spawnCelebration(x, y, count) {
     for (let i = 0; i < count; i++) {
       particles.push({
@@ -440,9 +383,6 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // ================================
-  // UPDATE
-  // ================================
   function update() {
     if (!gameStarted || paused || gameOver || countdownActive) {
       updateParticles();
@@ -479,9 +419,6 @@ window.addEventListener("DOMContentLoaded", () => {
     swingFlash *= 0.9;
   }
 
-  // ================================
-  // DRAW BACKGROUND
-  // ================================
   function drawBackground() {
     const bg = ctx.createLinearGradient(0, 0, width, height);
     bg.addColorStop(0, "#071426");
@@ -490,7 +427,6 @@ window.addEventListener("DOMContentLoaded", () => {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, width, height);
 
-    // subtle colored ambient glows
     ctx.save();
     ctx.globalAlpha = 0.22;
     ctx.fillStyle = "#FFD43B";
@@ -509,7 +445,6 @@ window.addEventListener("DOMContentLoaded", () => {
     ctx.fill();
     ctx.restore();
 
-    // homerun background shift
     if (homeRunGlow > 0.02) {
       ctx.save();
       ctx.globalAlpha = homeRunGlow * 0.35;
@@ -522,7 +457,6 @@ window.addEventListener("DOMContentLoaded", () => {
       ctx.restore();
     }
 
-    // field line
     ctx.save();
     ctx.strokeStyle = "rgba(255,255,255,0.08)";
     ctx.lineWidth = 3;
@@ -533,9 +467,6 @@ window.addEventListener("DOMContentLoaded", () => {
     ctx.restore();
   }
 
-  // ================================
-  // DRAW PLAYER
-  // ================================
   function drawPlayer() {
     const px = PLAYER_X();
     const py = PLAYER_Y();
@@ -543,24 +474,20 @@ window.addEventListener("DOMContentLoaded", () => {
 
     ctx.save();
 
-    // glow
     ctx.shadowBlur = 26;
     ctx.shadowColor = "#25A9FF";
 
-    // torso
     const torsoGrad = ctx.createLinearGradient(px, py - 150 * s, px, py + 50 * s);
     torsoGrad.addColorStop(0, "#7CF3FF");
     torsoGrad.addColorStop(1, "#009DFF");
     ctx.fillStyle = torsoGrad;
     roundRect(ctx, px - 34 * s, py - 150 * s, 68 * s, 115 * s, 26 * s, true, false);
 
-    // head
     ctx.fillStyle = "#A66CFF";
     ctx.beginPath();
     ctx.arc(px, py - 185 * s, 32 * s, 0, Math.PI * 2);
     ctx.fill();
 
-    // arms
     ctx.strokeStyle = "#39FF88";
     ctx.lineWidth = 18 * s;
     ctx.lineCap = "round";
@@ -577,7 +504,6 @@ window.addEventListener("DOMContentLoaded", () => {
     ctx.lineTo(px - 68 * s, py - 46 * s);
     ctx.stroke();
 
-    // legs
     ctx.beginPath();
     ctx.moveTo(px - 8 * s, py - 38 * s);
     ctx.lineTo(px - 20 * s, py + 34 * s);
@@ -590,7 +516,6 @@ window.addEventListener("DOMContentLoaded", () => {
     ctx.lineTo(px + 42 * s, py + 112 * s);
     ctx.stroke();
 
-    // bat
     ctx.shadowBlur = 18;
     ctx.shadowColor = "#FFD43B";
     ctx.strokeStyle = "#FFD43B";
@@ -602,7 +527,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
     ctx.restore();
 
-    // swing flash
     if (swingFlash > 0.05) {
       ctx.save();
       ctx.globalAlpha = swingFlash * 0.35;
@@ -615,15 +539,11 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // ================================
-  // DRAW BALL
-  // ================================
   function drawBall() {
     if (!ball) return;
 
     ctx.save();
 
-    // trail
     if (ball.hit) {
       ctx.globalAlpha = 0.2;
       ctx.fillStyle = ball.result === "home_run" ? "#FFD43B" : "#ffffff";
@@ -656,9 +576,6 @@ window.addEventListener("DOMContentLoaded", () => {
     ctx.restore();
   }
 
-  // ================================
-  // UI
-  // ================================
   function drawTopTitle() {
     ctx.save();
 
@@ -666,7 +583,7 @@ window.addEventListener("DOMContentLoaded", () => {
     roundRect(ctx, 18, 16, 380, 72, 20, true, false);
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "800 28px 'Baloo 2', Arial";
+    ctx.font = "800 28px Arial";
     ctx.fillText("BxCM JR. SLUGGERS", 32, 48);
 
     ctx.fillStyle = "rgba(255,255,255,0.78)";
@@ -706,7 +623,7 @@ window.addEventListener("DOMContentLoaded", () => {
       ctx.font = "800 14px Arial";
       ctx.fillText(c.label.toUpperCase(), x + 18, y + 28);
 
-      ctx.font = "800 34px 'Baloo 2', Arial";
+      ctx.font = "800 34px Arial";
       ctx.fillText(String(c.value), x + 18, y + 68);
     });
 
@@ -829,13 +746,13 @@ window.addEventListener("DOMContentLoaded", () => {
     ctx.strokeStyle = "#14304b";
 
     ctx.fillStyle = currentMessage.includes("HOME RUN") ? "#FFD43B" : "#ffffff";
-    ctx.font = "800 58px 'Baloo 2', Arial";
+    ctx.font = "800 58px Arial";
     ctx.strokeText(currentMessage, width / 2, height * 0.18);
     ctx.fillText(currentMessage, width / 2, height * 0.18);
 
     if (currentSubMessage) {
       ctx.fillStyle = "#25A9FF";
-      ctx.font = "800 32px 'Baloo 2', Arial";
+      ctx.font = "800 32px Arial";
       ctx.strokeText(currentSubMessage, width / 2, height * 0.25);
       ctx.fillText(currentSubMessage, width / 2, height * 0.25);
     }
@@ -853,7 +770,7 @@ window.addEventListener("DOMContentLoaded", () => {
     ctx.textAlign = "center";
 
     ctx.fillStyle = "#FFD43B";
-    ctx.font = "800 60px 'Baloo 2', Arial";
+    ctx.font = "800 60px Arial";
     ctx.fillText(currentMessage, width / 2, height * 0.36);
 
     ctx.fillStyle = "#ffffff";
@@ -870,9 +787,6 @@ window.addEventListener("DOMContentLoaded", () => {
     ctx.restore();
   }
 
-  // ================================
-  // DRAW LOOP
-  // ================================
   function render(now) {
     update();
 
@@ -894,7 +808,7 @@ window.addEventListener("DOMContentLoaded", () => {
         ctx.fillStyle = "rgba(0,0,0,0.30)";
         ctx.fillRect(0, 0, width, height);
         ctx.fillStyle = "#FFD43B";
-        ctx.font = "800 70px 'Baloo 2', Arial";
+        ctx.font = "800 70px Arial";
         ctx.textAlign = "center";
         ctx.fillText("PAUSED", width / 2, height * 0.42);
         ctx.restore();
@@ -910,9 +824,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
   requestAnimationFrame(render);
 
-  // ================================
-  // ROUND RECT HELPER
-  // ================================
   function roundRect(context, x, y, w, h, r, fill, stroke) {
     if (w <= 0 || h <= 0) return;
     const radius = Math.min(r, w / 2, h / 2);
