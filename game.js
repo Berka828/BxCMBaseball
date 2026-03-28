@@ -182,7 +182,7 @@ let CONTACT_DISTANCE = DIFFICULTIES[difficulty].contactDistance;
 const BAT_LENGTH = 132;
 
 // player proportion / placement
-const PLAYER_SCALE = 0.65;
+const PLAYER_SCALE = 0.40;
 const PLAYER_TARGET_X = 0.21;       // far-left quadrant
 const PLAYER_FLOOR_Y = 0.885;       // bottom-aligned feel
 const BALL_LANE_Y = 0.64;           // readable lower lane
