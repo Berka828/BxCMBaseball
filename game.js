@@ -118,7 +118,7 @@ const GRAVITY = 0.44;
 let CONTACT_DISTANCE = DIFFICULTIES[difficulty].contactDistance;
 const BAT_LENGTH = 132;
 
-const PLAYER_SCALE = 0.65;
+const PLAYER_SCALE = 0.40;
 const PLAYER_TARGET_X = 0.21;
 const PLAYER_FLOOR_Y = 0.885;
 const BALL_LANE_Y = 0.64;
