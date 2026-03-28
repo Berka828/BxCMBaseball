@@ -391,6 +391,84 @@ function drawBackground() {
 // The complete patched file is in this canvas document.
 // Copy from here instead of the broken link.
 
+// ================================
+// 🔊 AUDIO SYSTEM (FIXED)
+// ================================
+function initAudio() {
+  try {
+    if (!window.audioCtx) {
+      window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  } catch (e) {
+    console.warn("Audio init failed:", e);
+  }
+}
+
+function playStartSound() {
+  if (!window.audioCtx) return;
+
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  osc.type = "sine";
+  osc.frequency.value = 440;
+
+  gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.3);
+}
+
+function playCountdownBeep(val) {
+  if (!window.audioCtx) return;
+
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  osc.frequency.value = 300 + val * 80;
+
+  gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.2);
+}
+
+function playGoSound() {
+  if (!window.audioCtx) return;
+
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+
+  osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+  osc.frequency.linearRampToValueAtTime(800, audioCtx.currentTime + 0.2);
+
+  gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.4);
+}
+
+async function playIntroMusic() {
+  introMusicStarted = true;
+}
+
+function fadeOutIntroMusic() {}
+
+function startAmbientCrowd() {}
+function stopAmbientCrowd() {}
+
 async function startOrResumeGame(event) {
   if (event) {
     event.preventDefault();
