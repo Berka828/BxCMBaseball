@@ -1,165 +1,80 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Bronx Children’s Museum - Baseball Blast</title>
+  <meta charset="UTF-8" />
+  <title>BxCM Baseball</title>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
 
-  <link rel="stylesheet" href="./style.css" />
+    /* BACKGROUND (YOUR IMAGE) */
+    #splash {
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      background: url('splash-photo.png') center/cover no-repeat;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+
+    /* SUBTLE DARK OVERLAY (15%) */
+    #splash::after {
+      content: "";
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.15);
+      top: 0;
+      left: 0;
+    }
+
+    /* START BUTTON */
+    #startBtn {
+      position: relative;
+      z-index: 2;
+      padding: 20px 50px;
+      font-size: 28px;
+      border-radius: 50px;
+      border: none;
+      background: #FFC72C;
+      color: #000;
+      cursor: pointer;
+      box-shadow: 0 0 20px rgba(255,199,44,0.6);
+      transition: transform 0.2s ease;
+    }
+
+    #startBtn:hover {
+      transform: scale(1.05);
+    }
+
+    /* GAME CANVAS */
+    #gameCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+  </style>
 </head>
+
 <body>
-  <div class="stageWrap">
-    <video id="video" playsinline autoplay muted></video>
-    <canvas id="canvas"></canvas>
 
-    <!-- SPLASH -->
-    <div id="splashScreen" class="splashScreen">
-      <div class="splashBackdrop"></div>
-
-      <div class="splashGhost">
-        <img src="./splash-photo.png" alt="" />
-      </div>
-
-      <div class="splashGlow"></div>
-
-      <div class="splashSparkles">
-        <span></span><span></span><span></span>
-        <span></span><span></span><span></span>
-      </div>
-
-      <div class="splashInner">
-        <div class="splashPosterWrap">
-          <img src="./splash-photo.png" alt="BxCM Baseball Splash" class="splashPoster" />
-          <div class="splashPosterShade"></div>
-          <div class="splashShine"></div>
-        </div>
-
-        <div class="splashButtons">
-          <button id="splashStartBtn" class="splashStartBtn">Start Game</button>
-          <div class="splashHint">Press Start or raise both hands to begin</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- TOP -->
-    <div class="overlay compactTopBar">
-      <div class="brandChip">
-        <img
-          src="./BxCM_Logo_FullColor_dark-backgrounds.png"
-          alt="Bronx Children's Museum logo"
-          class="brandLogo"
-        />
-      </div>
-
-      <div class="compactTitleChip">
-        <div class="titleMain">BxCM JR. SLUGGERS ACADEMY</div>
-        <div class="titleSub">Swing big. Make contact. Chase the high score.</div>
-      </div>
-    </div>
-
-    <!-- SETTINGS / PAUSE PANEL -->
-    <div class="overlay controlDock" id="controlDock">
-      <button id="startBtn">Start Game</button>
-      <button id="pauseBtn" class="secondary">Pause</button>
-      <button id="resetBtn" class="secondary">Reset</button>
-      <button id="muteBtn" class="secondary blueBtn">Sound: On</button>
-
-      <div class="difficultyDock">
-        <div class="difficultyLabel">Difficulty</div>
-        <div class="difficultyButtons">
-          <button id="easyBtn" class="difficultyBtn">Easy</button>
-          <button id="mediumBtn" class="difficultyBtn active">Medium</button>
-          <button id="hardBtn" class="difficultyBtn">Hard</button>
-        </div>
-      </div>
-
-      <div class="sliderDock">
-        <div class="controlGroup">
-          <div class="difficultyLabel">Batting Side</div>
-          <div class="sideToggle">
-            <button id="rightHandBtn" class="sideBtn active">Right</button>
-            <button id="leftHandBtn" class="sideBtn">Left</button>
-          </div>
-        </div>
-
-        <div class="sliderWrap">
-          <label for="pitchSpeed">
-            <span>Pitch Speed</span>
-            <span id="pitchSpeedVal">12</span>
-          </label>
-          <input id="pitchSpeed" type="range" min="7" max="15" value="12" step="0.5" />
-        </div>
-
-        <div class="sliderWrap">
-          <label for="swingThreshold">
-            <span>Swing Threshold</span>
-            <span id="swingThresholdVal">420</span>
-          </label>
-          <input id="swingThreshold" type="range" min="250" max="700" value="420" step="10" />
-        </div>
-
-        <div class="sliderWrap">
-          <label for="pitchDelay">
-            <span>Reset Between Pitches</span>
-            <span id="pitchDelayVal">3.5s</span>
-          </label>
-          <input id="pitchDelay" type="range" min="1.0" max="4.5" value="3.5" step="0.1" />
-        </div>
-      </div>
-    </div>
-
-    <!-- MINI MAP -->
-    <div class="overlay lowerMiniMap">
-      <div class="miniMapCard">
-        <div class="miniMapTitle">Ball Path</div>
-        <canvas id="miniMapCanvas" width="240" height="150"></canvas>
-      </div>
-    </div>
-
-    <!-- BOTTOM STATS -->
-    <div class="bottomStatsBar">
-      <div class="bottomStatCard statYellow">
-        <div class="bottomStatLabel">Pitches</div>
-        <div class="bottomStatValue" id="pitchesEl">10</div>
-      </div>
-
-      <div class="bottomStatCard statBlue">
-        <div class="bottomStatLabel">Hits</div>
-        <div class="bottomStatValue" id="hitsEl">0</div>
-      </div>
-
-      <div class="bottomStatCard statPurple">
-        <div class="bottomStatLabel">Home Runs</div>
-        <div class="bottomStatValue" id="homeRunsEl">0</div>
-      </div>
-
-      <div class="bottomStatCard statGreen">
-        <div class="bottomStatLabel">Best Hit</div>
-        <div class="bottomStatValue" id="bestHitEl">0 FT</div>
-      </div>
-    </div>
-
-    <!-- hidden support IDs -->
-    <div class="hiddenSupport">
-      <span id="scoreEl">0</span>
-      <span id="missesEl">0</span>
-      <span id="veloEl">0</span>
-    </div>
-
-    <!-- TIP BAR -->
-    <div class="overlay educationalBar">
-      <div class="instructionChip" id="instructionChip">
-        Press Start or raise both hands to begin.
-      </div>
-    </div>
+  <!-- SPLASH -->
+  <div id="splash">
+    <button id="startBtn">START GAME</button>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
-  <script src="./game.js"></script>
+  <!-- GAME -->
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- IMPORTANT: JS AT BOTTOM -->
+  <script src="game.js"></script>
+
 </body>
 </html>
