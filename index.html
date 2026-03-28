@@ -16,7 +16,7 @@
     <video id="video" playsinline autoplay muted></video>
     <canvas id="canvas"></canvas>
 
-    <!-- SPLASH SCREEN -->
+    <!-- SPLASH -->
     <div id="splashScreen" class="splashScreen">
       <div class="splashBackdrop"></div>
 
@@ -35,6 +35,7 @@
       <div class="splashInner">
         <div class="splashPosterWrap">
           <img src="./splash-photo.png" alt="BxCM Baseball Splash" class="splashPoster" />
+          <div class="splashPosterShade"></div>
           <div class="splashShine"></div>
         </div>
 
@@ -62,7 +63,7 @@
     </div>
 
     <!-- CONTROL DOCK -->
-    <div class="overlay controlDock">
+    <div class="overlay controlDock" id="controlDock">
       <button id="startBtn">Start Game</button>
       <button id="pauseBtn" class="secondary">Pause</button>
       <button id="resetBtn" class="secondary">Reset</button>
@@ -112,7 +113,7 @@
       </div>
     </div>
 
-    <!-- LOWER MINIMAP -->
+    <!-- MINIMAP -->
     <div class="overlay lowerMiniMap">
       <div class="miniMapCard">
         <div class="miniMapTitle">Ball Path</div>
@@ -143,14 +144,14 @@
       </div>
     </div>
 
-    <!-- HIDDEN / SUPPORTING HUD VALUES USED BY JS -->
-    <div style="display:none;">
+    <!-- SUPPORT IDS -->
+    <div class="hiddenSupport">
       <span id="scoreEl">0</span>
       <span id="missesEl">0</span>
       <span id="veloEl">0</span>
     </div>
 
-    <!-- EDUCATIONAL / TIP BAR -->
+    <!-- TIP BAR -->
     <div class="overlay educationalBar">
       <div class="instructionChip" id="instructionChip">
         Press Start or raise both hands to begin.
