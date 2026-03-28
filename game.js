@@ -5,10 +5,55 @@ window.addEventListener("DOMContentLoaded", () => {
   const ctx = canvas.getContext("2d");
 
   if (!splash || !startBtn || !canvas) {
-    console.error("Missing required DOM elements.");
+    console.error("Missing required elements: #splash, #startBtn, or #gameCanvas");
     return;
   }
 
+  // ================================
+  // CAMERA SETUP
+  // ================================
+  const video = document.createElement("video");
+  video.setAttribute("playsinline", "true");
+  video.setAttribute("autoplay", "true");
+  video.setAttribute("muted", "true");
+  video.style.display = "none";
+  document.body.appendChild(video);
+
+  let cameraReady = false;
+  let cameraStream = null;
+
+  async function startCamera() {
+    try {
+      if (cameraStream) return true;
+
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "user",
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+
+      video.srcObject = cameraStream;
+
+      await new Promise((resolve) => {
+        video.onloadedmetadata = () => resolve();
+      });
+
+      await video.play();
+      cameraReady = true;
+      return true;
+    } catch (err) {
+      console.error("Camera failed:", err);
+      cameraReady = false;
+      return false;
+    }
+  }
+
+  // ================================
+  // CANVAS
+  // ================================
   let width = 0;
   let height = 0;
 
@@ -16,9 +61,13 @@ window.addEventListener("DOMContentLoaded", () => {
     width = canvas.width = window.innerWidth;
     height = canvas.height = window.innerHeight;
   }
+
   window.addEventListener("resize", resizeCanvas);
   resizeCanvas();
 
+  // ================================
+  // GAME STATE
+  // ================================
   const TOTAL_PITCHES = 5;
 
   let gameStarted = false;
@@ -49,10 +98,24 @@ window.addEventListener("DOMContentLoaded", () => {
   let particles = [];
   let homeRunGlow = 0;
 
-  const PLAYER_X = () => width * 0.20;
-  const PLAYER_Y = () => height * 0.76;
+  // Player placement
+  const PLAYER_X = () => width * 0.18;
+  const PLAYER_Y = () => height * 0.78;
   const PLAYER_SCALE = () => Math.min(width, height) * 0.00115;
-  const CONTACT_X = () => width * 0.33;
+  const CONTACT_X = () => width * 0.31;
+
+  // pitch zone = stomach to mid-thigh area
+  function getPitchZoneTop() {
+    return height * 0.57;
+  }
+
+  function getPitchZoneBottom() {
+    return height * 0.71;
+  }
+
+  function getRandomPitchY() {
+    return getPitchZoneTop() + Math.random() * (getPitchZoneBottom() - getPitchZoneTop());
+  }
 
   function clamp(v, min, max) {
     return Math.max(min, Math.min(max, v));
@@ -79,18 +142,6 @@ window.addEventListener("DOMContentLoaded", () => {
     return now < messageUntil;
   }
 
-  function getPitchZoneTop() {
-    return height * 0.58;
-  }
-
-  function getPitchZoneBottom() {
-    return height * 0.72;
-  }
-
-  function getRandomPitchY() {
-    return getPitchZoneTop() + Math.random() * (getPitchZoneBottom() - getPitchZoneTop());
-  }
-
   function resetRound() {
     clearNextPitchTimer();
 
@@ -112,13 +163,23 @@ window.addEventListener("DOMContentLoaded", () => {
 
     particles = [];
     homeRunGlow = 0;
-    countdownActive = false;
-    countdownValue = 5;
     paused = false;
     gameOver = false;
+    countdownActive = false;
+    countdownValue = 5;
+    swingFlash = 0;
   }
 
-  function startGame() {
+  // ================================
+  // START / RESET
+  // ================================
+  async function startGame() {
+    const ok = await startCamera();
+    if (!ok) {
+      alert("Camera permission is required to start the game.");
+      return;
+    }
+
     resetRound();
     gameStarted = true;
     splash.style.display = "none";
@@ -133,6 +194,9 @@ window.addEventListener("DOMContentLoaded", () => {
 
   startBtn.addEventListener("click", startGame);
 
+  // ================================
+  // COUNTDOWN
+  // ================================
   function startCountdown() {
     countdownActive = true;
     countdownValue = 5;
@@ -157,6 +221,9 @@ window.addEventListener("DOMContentLoaded", () => {
     tick();
   }
 
+  // ================================
+  // BALL
+  // ================================
   function createPitch() {
     if (!gameStarted || gameOver || paused) return;
     if (pitchesLeft <= 0) {
@@ -170,7 +237,7 @@ window.addEventListener("DOMContentLoaded", () => {
     ball = {
       x: width * 0.90,
       y: getRandomPitchY(),
-      vx: -10.2,
+      vx: -10.5,
       vy: rand(-0.10, 0.10),
       radius: 14,
       hit: false,
@@ -184,9 +251,7 @@ window.addEventListener("DOMContentLoaded", () => {
   function scheduleNextPitch(delay = 1800) {
     clearNextPitchTimer();
     nextPitchTimer = setTimeout(() => {
-      if (!gameOver && !paused) {
-        createPitch();
-      }
+      if (!gameOver && !paused) createPitch();
     }, delay);
   }
 
@@ -194,7 +259,8 @@ window.addEventListener("DOMContentLoaded", () => {
     misses++;
     ball = null;
     targetDistance = 0;
-    showMessage("MISS!", reason, 3200);
+
+    showMessage("MISS!", reason, 3400);
 
     if (pitchesLeft <= 0) {
       setTimeout(endGame, 2200);
@@ -243,6 +309,9 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // ================================
+  // SWING
+  // ================================
   function swing() {
     if (!gameStarted || gameOver || paused || countdownActive) return;
 
@@ -251,19 +320,22 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!ball || ball.hit) return;
 
     const dx = Math.abs(ball.x - CONTACT_X());
-    const dy = ball.y - (PLAYER_Y() - 65);
+    const dy = ball.y - (PLAYER_Y() - 70);
 
-    if (ball.x < PLAYER_X() + 65) {
+    // if ball is already past the batter, no hit
+    if (ball.x < PLAYER_X() + 60) {
       resolveMiss("Too late");
       return;
     }
 
+    // vertical feedback
     if (Math.abs(dy) > 120) {
       if (dy < 0) resolveMiss("Swing too high");
       else resolveMiss("Swing too low");
       return;
     }
 
+    // timing windows
     if (dx < 24) {
       ball.hit = true;
       ball.vx = rand(10, 13);
@@ -322,6 +394,9 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // ================================
+  // END GAME
+  // ================================
   function endGame() {
     gameOver = true;
     paused = false;
@@ -339,6 +414,9 @@ window.addEventListener("DOMContentLoaded", () => {
     showMessage(title, subtitle, 999999);
   }
 
+  // ================================
+  // PARTICLES
+  // ================================
   function spawnCelebration(x, y, count) {
     for (let i = 0; i < count; i++) {
       particles.push({
@@ -360,7 +438,6 @@ window.addEventListener("DOMContentLoaded", () => {
       p.y += p.vy;
       p.vy += 0.18;
       p.life--;
-
       if (p.life <= 0) particles.splice(i, 1);
     }
   }
@@ -375,6 +452,9 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // ================================
+  // UPDATE
+  // ================================
   function update() {
     if (!gameStarted || paused || gameOver || countdownActive) {
       updateParticles();
@@ -410,6 +490,26 @@ window.addEventListener("DOMContentLoaded", () => {
     swingFlash *= 0.90;
   }
 
+  // ================================
+  // DRAW
+  // ================================
+  function drawCameraLayer() {
+    if (!cameraReady || video.readyState < 2) return;
+
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.translate(width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, width, height);
+    ctx.restore();
+
+    // darken camera so gameplay stays visible
+    ctx.save();
+    ctx.fillStyle = "rgba(4,10,22,0.52)";
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+  }
+
   function drawBackground() {
     const bg = ctx.createLinearGradient(0, 0, width, height);
     bg.addColorStop(0, "#08182f");
@@ -418,27 +518,30 @@ window.addEventListener("DOMContentLoaded", () => {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, width, height);
 
+    drawCameraLayer();
+
+    // subtle batting-lane styling
     ctx.save();
-    ctx.globalAlpha = 0.14;
+    ctx.globalAlpha = 0.10;
     ctx.fillStyle = "#ffd43b";
     ctx.beginPath();
-    ctx.arc(width * 0.10, height * 0.18, 130, 0, Math.PI * 2);
+    ctx.arc(width * 0.14, height * 0.18, 120, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = "#25a9ff";
     ctx.beginPath();
-    ctx.arc(width * 0.84, height * 0.22, 150, 0, Math.PI * 2);
+    ctx.arc(width * 0.86, height * 0.22, 140, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = "#7d4dff";
     ctx.beginPath();
-    ctx.arc(width * 0.73, height * 0.79, 120, 0, Math.PI * 2);
+    ctx.arc(width * 0.76, height * 0.82, 120, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
     if (homeRunGlow > 0.02) {
       ctx.save();
-      ctx.globalAlpha = homeRunGlow * 0.30;
+      ctx.globalAlpha = homeRunGlow * 0.28;
       const glow = ctx.createLinearGradient(0, 0, width, height);
       glow.addColorStop(0, "#7D4DFF");
       glow.addColorStop(0.5, "#25A9FF");
@@ -448,13 +551,21 @@ window.addEventListener("DOMContentLoaded", () => {
       ctx.restore();
     }
 
+    // floor / lane
     ctx.save();
     ctx.strokeStyle = "rgba(255,255,255,0.08)";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(width * 0.04, height * 0.68);
-    ctx.lineTo(width * 0.96, height * 0.68);
+    ctx.moveTo(width * 0.04, height * 0.69);
+    ctx.lineTo(width * 0.96, height * 0.69);
     ctx.stroke();
+    ctx.restore();
+
+    // camera status
+    ctx.save();
+    ctx.fillStyle = cameraReady ? "#2ED573" : "#ff6b6b";
+    ctx.font = "800 14px Arial";
+    ctx.fillText(cameraReady ? "CAMERA ON" : "CAMERA OFF", width - 130, 28);
     ctx.restore();
   }
 
@@ -763,7 +874,6 @@ window.addEventListener("DOMContentLoaded", () => {
     ctx.fillStyle = "#25A9FF";
     ctx.font = "800 18px Arial";
     ctx.fillText("Press R to return to splash", width / 2, height * 0.78);
-
     ctx.restore();
   }
 
