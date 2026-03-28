@@ -16,7 +16,6 @@ window.addEventListener("DOMContentLoaded", () => {
     width = canvas.width = window.innerWidth;
     height = canvas.height = window.innerHeight;
   }
-
   window.addEventListener("resize", resizeCanvas);
   resizeCanvas();
 
@@ -50,9 +49,10 @@ window.addEventListener("DOMContentLoaded", () => {
   let particles = [];
   let homeRunGlow = 0;
 
-  const PLAYER_X = () => width * 0.22;
+  const PLAYER_X = () => width * 0.20;
   const PLAYER_Y = () => height * 0.76;
-  const PLAYER_SCALE = () => Math.min(width, height) * 0.00105;
+  const PLAYER_SCALE = () => Math.min(width, height) * 0.00115;
+  const CONTACT_X = () => width * 0.33;
 
   function clamp(v, min, max) {
     return Math.max(min, Math.min(max, v));
@@ -131,9 +131,7 @@ window.addEventListener("DOMContentLoaded", () => {
     splash.style.display = "flex";
   }
 
-  startBtn.addEventListener("click", () => {
-    startGame();
-  });
+  startBtn.addEventListener("click", startGame);
 
   function startCountdown() {
     countdownActive = true;
@@ -170,14 +168,12 @@ window.addEventListener("DOMContentLoaded", () => {
     displayDistance = 0;
 
     ball = {
-      x: width * 0.9,
+      x: width * 0.90,
       y: getRandomPitchY(),
-      vx: -10.5,
-      vy: rand(-0.12, 0.12),
-      radius: 16,
+      vx: -10.2,
+      vy: rand(-0.10, 0.10),
+      radius: 14,
       hit: false,
-      out: false,
-      traveled: 0,
       result: "",
       finalDistance: 0
     };
@@ -185,7 +181,7 @@ window.addEventListener("DOMContentLoaded", () => {
     pitchesLeft--;
   }
 
-  function scheduleNextPitch(delay = 1600) {
+  function scheduleNextPitch(delay = 1800) {
     clearNextPitchTimer();
     nextPitchTimer = setTimeout(() => {
       if (!gameOver && !paused) {
@@ -198,8 +194,7 @@ window.addEventListener("DOMContentLoaded", () => {
     misses++;
     ball = null;
     targetDistance = 0;
-
-    showMessage("MISS!", reason, 3500);
+    showMessage("MISS!", reason, 3200);
 
     if (pitchesLeft <= 0) {
       setTimeout(endGame, 2200);
@@ -233,18 +228,18 @@ window.addEventListener("DOMContentLoaded", () => {
       points = 30;
       title = "NICE HIT!";
       spawnCelebration(ball.x, ball.y, 18);
-      scheduleNextPitch(2600);
+      scheduleNextPitch(2500);
     }
 
     score += points;
     ball.result = kind;
     ball.finalDistance = distance;
 
-    showMessage(title, subtitle, kind === "home_run" ? 4300 : 3200);
+    showMessage(title, subtitle, kind === "home_run" ? 4300 : 3000);
 
     if (pitchesLeft <= 0) {
       clearNextPitchTimer();
-      setTimeout(endGame, kind === "home_run" ? 4600 : 3200);
+      setTimeout(endGame, kind === "home_run" ? 4500 : 3000);
     }
   }
 
@@ -255,11 +250,10 @@ window.addEventListener("DOMContentLoaded", () => {
 
     if (!ball || ball.hit) return;
 
-    const contactX = PLAYER_X() + 120;
-    const dx = Math.abs(ball.x - contactX);
-    const dy = ball.y - (PLAYER_Y() - 70);
+    const dx = Math.abs(ball.x - CONTACT_X());
+    const dy = ball.y - (PLAYER_Y() - 65);
 
-    if (ball.x < PLAYER_X() + 60) {
+    if (ball.x < PLAYER_X() + 65) {
       resolveMiss("Too late");
       return;
     }
@@ -270,31 +264,31 @@ window.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    if (dx < 26) {
+    if (dx < 24) {
       ball.hit = true;
       ball.vx = rand(10, 13);
-      ball.vy = rand(-11.5, -8.5);
+      ball.vy = rand(-11, -8.3);
       resolveHit("home_run", Math.round(rand(170, 235)));
       return;
     }
 
-    if (dx < 60) {
+    if (dx < 56) {
       ball.hit = true;
-      ball.vx = rand(8, 10.5);
-      ball.vy = rand(-8.5, -6.5);
+      ball.vx = rand(8.2, 10.2);
+      ball.vy = rand(-8.2, -6.1);
       resolveHit("big_hit", Math.round(rand(105, 165)));
       return;
     }
 
-    if (dx < 95) {
+    if (dx < 92) {
       ball.hit = true;
-      ball.vx = rand(6, 8);
-      ball.vy = rand(-5.8, -4.2);
+      ball.vx = rand(6.3, 8.0);
+      ball.vy = rand(-5.4, -4.0);
       resolveHit("single", Math.round(rand(60, 105)));
       return;
     }
 
-    if (ball.x > contactX) {
+    if (ball.x > CONTACT_X()) {
       resolveMiss("Too early");
     } else {
       resolveMiss("Too late");
@@ -367,9 +361,7 @@ window.addEventListener("DOMContentLoaded", () => {
       p.vy += 0.18;
       p.life--;
 
-      if (p.life <= 0) {
-        particles.splice(i, 1);
-      }
+      if (p.life <= 0) particles.splice(i, 1);
     }
   }
 
@@ -388,7 +380,7 @@ window.addEventListener("DOMContentLoaded", () => {
       updateParticles();
       displayDistance += (targetDistance - displayDistance) * 0.08;
       homeRunGlow *= 0.96;
-      swingFlash *= 0.9;
+      swingFlash *= 0.90;
       return;
     }
 
@@ -406,7 +398,6 @@ window.addEventListener("DOMContentLoaded", () => {
         ball.x += ball.vx;
         ball.y += ball.vy;
         ball.vy += 0.25;
-        ball.traveled += Math.abs(ball.vx);
 
         if (ball.y > height + 50 || ball.x > width + 80) {
           ball = null;
@@ -416,38 +407,38 @@ window.addEventListener("DOMContentLoaded", () => {
 
     displayDistance += (targetDistance - displayDistance) * 0.08;
     homeRunGlow *= 0.96;
-    swingFlash *= 0.9;
+    swingFlash *= 0.90;
   }
 
   function drawBackground() {
     const bg = ctx.createLinearGradient(0, 0, width, height);
-    bg.addColorStop(0, "#071426");
-    bg.addColorStop(0.45, "#0a1d38");
-    bg.addColorStop(1, "#050914");
+    bg.addColorStop(0, "#08182f");
+    bg.addColorStop(0.45, "#06214a");
+    bg.addColorStop(1, "#04101f");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, width, height);
 
     ctx.save();
-    ctx.globalAlpha = 0.22;
-    ctx.fillStyle = "#FFD43B";
+    ctx.globalAlpha = 0.14;
+    ctx.fillStyle = "#ffd43b";
     ctx.beginPath();
-    ctx.arc(width * 0.12, height * 0.18, 180, 0, Math.PI * 2);
+    ctx.arc(width * 0.10, height * 0.18, 130, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = "#25A9FF";
+    ctx.fillStyle = "#25a9ff";
     ctx.beginPath();
-    ctx.arc(width * 0.82, height * 0.22, 220, 0, Math.PI * 2);
+    ctx.arc(width * 0.84, height * 0.22, 150, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = "#7D4DFF";
+    ctx.fillStyle = "#7d4dff";
     ctx.beginPath();
-    ctx.arc(width * 0.72, height * 0.78, 190, 0, Math.PI * 2);
+    ctx.arc(width * 0.73, height * 0.79, 120, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
     if (homeRunGlow > 0.02) {
       ctx.save();
-      ctx.globalAlpha = homeRunGlow * 0.35;
+      ctx.globalAlpha = homeRunGlow * 0.30;
       const glow = ctx.createLinearGradient(0, 0, width, height);
       glow.addColorStop(0, "#7D4DFF");
       glow.addColorStop(0.5, "#25A9FF");
@@ -459,7 +450,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
     ctx.save();
     ctx.strokeStyle = "rgba(255,255,255,0.08)";
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(width * 0.04, height * 0.68);
     ctx.lineTo(width * 0.96, height * 0.68);
@@ -473,67 +464,66 @@ window.addEventListener("DOMContentLoaded", () => {
     const s = PLAYER_SCALE();
 
     ctx.save();
-
-    ctx.shadowBlur = 26;
+    ctx.shadowBlur = 22;
     ctx.shadowColor = "#25A9FF";
 
-    const torsoGrad = ctx.createLinearGradient(px, py - 150 * s, px, py + 50 * s);
+    const torsoGrad = ctx.createLinearGradient(px, py - 140 * s, px, py + 40 * s);
     torsoGrad.addColorStop(0, "#7CF3FF");
-    torsoGrad.addColorStop(1, "#009DFF");
+    torsoGrad.addColorStop(1, "#00A6FF");
     ctx.fillStyle = torsoGrad;
-    roundRect(ctx, px - 34 * s, py - 150 * s, 68 * s, 115 * s, 26 * s, true, false);
+    roundRect(ctx, px - 30 * s, py - 140 * s, 60 * s, 108 * s, 24 * s, true, false);
 
     ctx.fillStyle = "#A66CFF";
     ctx.beginPath();
-    ctx.arc(px, py - 185 * s, 32 * s, 0, Math.PI * 2);
+    ctx.arc(px, py - 175 * s, 28 * s, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = "#39FF88";
-    ctx.lineWidth = 18 * s;
+    ctx.lineWidth = 16 * s;
     ctx.lineCap = "round";
 
     ctx.beginPath();
-    ctx.moveTo(px - 10 * s, py - 120 * s);
-    ctx.lineTo(px + 35 * s, py - 95 * s);
-    ctx.lineTo(px + 80 * s, py - 55 * s);
+    ctx.moveTo(px - 8 * s, py - 112 * s);
+    ctx.lineTo(px + 32 * s, py - 88 * s);
+    ctx.lineTo(px + 72 * s, py - 50 * s);
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.moveTo(px - 14 * s, py - 120 * s);
-    ctx.lineTo(px - 44 * s, py - 84 * s);
-    ctx.lineTo(px - 68 * s, py - 46 * s);
+    ctx.moveTo(px - 12 * s, py - 112 * s);
+    ctx.lineTo(px - 40 * s, py - 82 * s);
+    ctx.lineTo(px - 64 * s, py - 44 * s);
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.moveTo(px - 8 * s, py - 38 * s);
-    ctx.lineTo(px - 20 * s, py + 34 * s);
-    ctx.lineTo(px - 34 * s, py + 112 * s);
+    ctx.moveTo(px - 8 * s, py - 32 * s);
+    ctx.lineTo(px - 18 * s, py + 34 * s);
+    ctx.lineTo(px - 30 * s, py + 108 * s);
     ctx.stroke();
 
     ctx.beginPath();
-    ctx.moveTo(px + 8 * s, py - 38 * s);
-    ctx.lineTo(px + 24 * s, py + 34 * s);
-    ctx.lineTo(px + 42 * s, py + 112 * s);
+    ctx.moveTo(px + 8 * s, py - 32 * s);
+    ctx.lineTo(px + 22 * s, py + 34 * s);
+    ctx.lineTo(px + 38 * s, py + 108 * s);
     ctx.stroke();
 
-    ctx.shadowBlur = 18;
+    ctx.shadowBlur = 14;
     ctx.shadowColor = "#FFD43B";
     ctx.strokeStyle = "#FFD43B";
-    ctx.lineWidth = 10 * s;
+    ctx.lineWidth = 9 * s;
     ctx.beginPath();
-    ctx.moveTo(px + 75 * s, py - 60 * s);
-    ctx.lineTo(px + 150 * s, py - 118 * s);
+    ctx.moveTo(px + 74 * s, py - 52 * s);
+    ctx.lineTo(px + 136 * s, py - 102 * s);
     ctx.stroke();
 
     ctx.restore();
 
     if (swingFlash > 0.05) {
       ctx.save();
-      ctx.globalAlpha = swingFlash * 0.35;
+      ctx.globalAlpha = swingFlash * 0.30;
       ctx.strokeStyle = "#FFD43B";
-      ctx.lineWidth = 8;
+      ctx.lineWidth = 6;
       ctx.beginPath();
-      ctx.arc(px + 70 * s, py - 70 * s, 72 * s, -1.2, 0.35);
+      ctx.arc(px + 64 * s, py - 62 * s, 64 * s, -1.2, 0.3);
       ctx.stroke();
       ctx.restore();
     }
@@ -545,7 +535,7 @@ window.addEventListener("DOMContentLoaded", () => {
     ctx.save();
 
     if (ball.hit) {
-      ctx.globalAlpha = 0.2;
+      ctx.globalAlpha = 0.18;
       ctx.fillStyle = ball.result === "home_run" ? "#FFD43B" : "#ffffff";
       ctx.beginPath();
       ctx.arc(ball.x - 18, ball.y + 8, ball.radius * 0.9, 0, Math.PI * 2);
@@ -556,7 +546,7 @@ window.addEventListener("DOMContentLoaded", () => {
       ctx.globalAlpha = 1;
     }
 
-    ctx.shadowBlur = ball.result === "home_run" ? 24 : 12;
+    ctx.shadowBlur = ball.result === "home_run" ? 22 : 10;
     ctx.shadowColor = ball.result === "home_run" ? "#FFD43B" : "#ffffff";
 
     ctx.fillStyle = "#ffffff";
@@ -578,56 +568,82 @@ window.addEventListener("DOMContentLoaded", () => {
 
   function drawTopTitle() {
     ctx.save();
-
-    ctx.fillStyle = "rgba(8,18,40,0.78)";
-    roundRect(ctx, 18, 16, 380, 72, 20, true, false);
+    ctx.fillStyle = "rgba(8,18,40,0.82)";
+    roundRect(ctx, 18, 16, 360, 62, 18, true, false);
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "800 28px Arial";
-    ctx.fillText("BxCM JR. SLUGGERS", 32, 48);
+    ctx.font = "800 24px Arial";
+    ctx.fillText("BxCM JR. SLUGGERS", 30, 42);
 
-    ctx.fillStyle = "rgba(255,255,255,0.78)";
-    ctx.font = "800 15px Arial";
-    ctx.fillText("Swing big. Make contact. Chase the high score.", 34, 72);
-
+    ctx.fillStyle = "rgba(255,255,255,0.82)";
+    ctx.font = "800 14px Arial";
+    ctx.fillText("Swing big. Make contact. Chase the high score.", 30, 60);
     ctx.restore();
   }
 
   function drawBottomStats() {
     const cards = [
-      { label: "Pitches", value: pitchesLeft, color1: "#FFD43B", color2: "#FFB300", dark: true },
-      { label: "Hits", value: hits, color1: "#25A9FF", color2: "#007AFF", dark: false },
-      { label: "Home Runs", value: homeRuns, color1: "#7D4DFF", color2: "#5F33FF", dark: false },
-      { label: "Best Hit", value: `${Math.round(bestDistance)} FT`, color1: "#2ED573", color2: "#14B45A", dark: true }
+      { label: "Pitches", value: pitchesLeft, c1: "#FFD43B", c2: "#FFB300", dark: true },
+      { label: "Hits", value: hits, c1: "#25A9FF", c2: "#007AFF", dark: false },
+      { label: "Home Runs", value: homeRuns, c1: "#7D4DFF", c2: "#5F33FF", dark: false },
+      { label: "Best Hit", value: `${Math.round(bestDistance)} FT`, c1: "#2ED573", c2: "#14B45A", dark: true }
     ];
 
-    const totalWidth = Math.min(width * 0.92, 980);
-    const gap = 14;
+    const totalWidth = Math.min(width * 0.84, 820);
+    const gap = 12;
     const cardW = (totalWidth - gap * 3) / 4;
-    const cardH = 94;
+    const cardH = 82;
     const startX = (width - totalWidth) / 2;
-    const y = height - 122;
+    const y = height - 104;
 
     ctx.save();
 
     cards.forEach((c, i) => {
       const x = startX + i * (cardW + gap);
       const grad = ctx.createLinearGradient(x, y, x, y + cardH);
-      grad.addColorStop(0, c.color1);
-      grad.addColorStop(1, c.color2);
+      grad.addColorStop(0, c.c1);
+      grad.addColorStop(1, c.c2);
 
       ctx.fillStyle = grad;
-      roundRect(ctx, x, y, cardW, cardH, 24, true, false);
+      roundRect(ctx, x, y, cardW, cardH, 20, true, false);
 
       ctx.fillStyle = c.dark ? "#11213d" : "#ffffff";
-      ctx.font = "800 14px Arial";
-      ctx.fillText(c.label.toUpperCase(), x + 18, y + 28);
+      ctx.font = "800 13px Arial";
+      ctx.fillText(c.label.toUpperCase(), x + 16, y + 24);
 
-      ctx.font = "800 34px Arial";
-      ctx.fillText(String(c.value), x + 18, y + 68);
+      ctx.font = "800 30px Arial";
+      ctx.fillText(String(c.value), x + 16, y + 58);
     });
 
     ctx.restore();
+  }
+
+  function drawPitchIcons() {
+    const gap = 20;
+    const r = 7;
+    const totalW = (TOTAL_PITCHES - 1) * gap;
+    const startX = width / 2 - totalW / 2;
+    const y = height - 128;
+
+    for (let i = 0; i < TOTAL_PITCHES; i++) {
+      const active = i < pitchesLeft;
+      ctx.save();
+      ctx.globalAlpha = active ? 1 : 0.24;
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(startX + i * gap, y, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#d64545";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(startX + i * gap - 2.5, y, r - 3.5, -1.1, 1.1);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(startX + i * gap + 2.5, y, r - 3.5, 2.0, 4.2);
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   function drawInstructionChip() {
@@ -638,54 +654,26 @@ window.addEventListener("DOMContentLoaded", () => {
         : "Click / tap to swing • Space to pause";
 
     ctx.save();
-    ctx.font = "800 18px Arial";
-    const tw = ctx.measureText(text).width + 40;
-    const th = 42;
+    ctx.font = "800 16px Arial";
+    const tw = ctx.measureText(text).width + 34;
+    const th = 36;
     const x = width / 2 - tw / 2;
-    const y = height - 44;
+    const y = height - 30;
 
-    ctx.fillStyle = "rgba(8,18,40,0.82)";
+    ctx.fillStyle = "rgba(8,18,40,0.86)";
     roundRect(ctx, x, y, tw, th, 999, true, false);
 
     ctx.fillStyle = "#ffffff";
-    ctx.fillText(text, x + 20, y + 27);
+    ctx.fillText(text, x + 17, y + 24);
     ctx.restore();
   }
 
-  function drawPitchIcons() {
-    const gap = 24;
-    const r = 8;
-    const totalW = (TOTAL_PITCHES - 1) * gap;
-    const startX = width / 2 - totalW / 2;
-    const y = height - 150;
-
-    for (let i = 0; i < TOTAL_PITCHES; i++) {
-      const active = i < pitchesLeft;
-      ctx.save();
-      ctx.globalAlpha = active ? 1 : 0.28;
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath();
-      ctx.arc(startX + i * gap, y, r, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.strokeStyle = "#d64545";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(startX + i * gap - 3, y, r - 4, -1.1, 1.1);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(startX + i * gap + 3, y, r - 4, 2.0, 4.2);
-      ctx.stroke();
-      ctx.restore();
-    }
-  }
-
   function drawThermometer() {
-    const x = width - 72;
+    const x = width - 58;
     const y = height * 0.22;
-    const w = 28;
-    const h = 220;
-    const bulbR = 18;
+    const w = 20;
+    const h = 190;
+    const bulbR = 14;
 
     const ratio = clamp(displayDistance / 240, 0, 1);
     const fillH = h * ratio;
@@ -694,7 +682,7 @@ window.addEventListener("DOMContentLoaded", () => {
     ctx.save();
 
     ctx.fillStyle = "rgba(10,20,40,0.72)";
-    roundRect(ctx, x, y, w, h, 16, true, false);
+    roundRect(ctx, x, y, w, h, 12, true, false);
 
     const grad = ctx.createLinearGradient(0, y + h, 0, y);
     grad.addColorStop(0, "#25A9FF");
@@ -702,29 +690,24 @@ window.addEventListener("DOMContentLoaded", () => {
     grad.addColorStop(1, "#FFD43B");
 
     ctx.fillStyle = grad;
-    roundRect(ctx, x + 4, fillY, w - 8, fillH, 12, true, false);
+    roundRect(ctx, x + 3, fillY, w - 6, fillH, 10, true, false);
 
     ctx.beginPath();
-    ctx.arc(x + w / 2, y + h + 18, bulbR, 0, Math.PI * 2);
+    ctx.arc(x + w / 2, y + h + 14, bulbR, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = "rgba(255,255,255,0.28)";
-    ctx.lineWidth = 3;
-    roundRect(ctx, x, y, w, h, 16, false, true);
+    ctx.lineWidth = 2;
+    roundRect(ctx, x, y, w, h, 12, false, true);
     ctx.beginPath();
-    ctx.arc(x + w / 2, y + h + 18, bulbR, 0, Math.PI * 2);
+    ctx.arc(x + w / 2, y + h + 14, bulbR, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "800 12px Arial";
+    ctx.font = "800 10px Arial";
     ctx.textAlign = "center";
-    ctx.fillText("HIT", x + w / 2, y - 12);
-    ctx.fillText("DIST", x + w / 2, y + h + 48);
-
-    if (displayDistance > 0) {
-      ctx.font = "800 14px Arial";
-      ctx.fillText(`${Math.round(displayDistance)}`, x + w / 2, y + h + 68);
-    }
+    ctx.fillText("HIT", x + w / 2, y - 10);
+    ctx.fillText("DIST", x + w / 2, y + h + 34);
 
     ctx.restore();
   }
@@ -737,22 +720,20 @@ window.addEventListener("DOMContentLoaded", () => {
 
     let alpha = 1;
     const remaining = messageUntil - now;
-    if (remaining < 600) {
-      alpha = remaining / 600;
-    }
+    if (remaining < 600) alpha = remaining / 600;
 
     ctx.globalAlpha = clamp(alpha, 0, 1);
-    ctx.lineWidth = 8;
+    ctx.lineWidth = 7;
     ctx.strokeStyle = "#14304b";
 
     ctx.fillStyle = currentMessage.includes("HOME RUN") ? "#FFD43B" : "#ffffff";
-    ctx.font = "800 58px Arial";
+    ctx.font = "800 54px Arial";
     ctx.strokeText(currentMessage, width / 2, height * 0.18);
     ctx.fillText(currentMessage, width / 2, height * 0.18);
 
     if (currentSubMessage) {
       ctx.fillStyle = "#25A9FF";
-      ctx.font = "800 32px Arial";
+      ctx.font = "800 28px Arial";
       ctx.strokeText(currentSubMessage, width / 2, height * 0.25);
       ctx.fillText(currentSubMessage, width / 2, height * 0.25);
     }
@@ -764,24 +745,23 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!summaryReady) return;
 
     ctx.save();
-    ctx.fillStyle = "rgba(0,0,0,0.36)";
+    ctx.fillStyle = "rgba(0,0,0,0.38)";
     ctx.fillRect(0, 0, width, height);
 
     ctx.textAlign = "center";
-
     ctx.fillStyle = "#FFD43B";
-    ctx.font = "800 60px Arial";
+    ctx.font = "800 56px Arial";
     ctx.fillText(currentMessage, width / 2, height * 0.36);
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "800 24px Arial";
+    ctx.font = "800 22px Arial";
     ctx.fillText(`Score: ${score}`, width / 2, height * 0.48);
     ctx.fillText(`Hits: ${hits}`, width / 2, height * 0.54);
     ctx.fillText(`Home Runs: ${homeRuns}`, width / 2, height * 0.60);
     ctx.fillText(`Best Hit: ${Math.round(bestDistance)} FT`, width / 2, height * 0.66);
 
     ctx.fillStyle = "#25A9FF";
-    ctx.font = "800 20px Arial";
+    ctx.font = "800 18px Arial";
     ctx.fillText("Press R to return to splash", width / 2, height * 0.78);
 
     ctx.restore();
@@ -789,7 +769,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
   function render(now) {
     update();
-
     drawBackground();
 
     if (gameStarted) {
@@ -808,15 +787,13 @@ window.addEventListener("DOMContentLoaded", () => {
         ctx.fillStyle = "rgba(0,0,0,0.30)";
         ctx.fillRect(0, 0, width, height);
         ctx.fillStyle = "#FFD43B";
-        ctx.font = "800 70px Arial";
+        ctx.font = "800 66px Arial";
         ctx.textAlign = "center";
         ctx.fillText("PAUSED", width / 2, height * 0.42);
         ctx.restore();
       }
 
-      if (gameOver) {
-        drawSummary();
-      }
+      if (gameOver) drawSummary();
     }
 
     requestAnimationFrame(render);
