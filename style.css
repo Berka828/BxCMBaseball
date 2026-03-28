@@ -121,18 +121,21 @@ body{background:#000}
 }
 
 .lowerMiniMap{
-  left:20px;
-  bottom:162px;
+  right:20px;
+  left:auto;
+  bottom:170px;
   pointer-events:none;
+  z-index:32;
 }
 
 .miniMapCard{
-  background:rgba(8,18,40,.76);
+  width:220px;
+  background:rgba(8,18,40,.70);
   border:1px solid var(--line);
-  border-radius:20px;
-  padding:12px;
+  border-radius:18px;
+  padding:10px;
   box-shadow:0 12px 28px rgba(0,0,0,.22);
-  opacity:.95;
+  opacity:.93;
 }
 
 .miniMapTitle{
@@ -142,6 +145,12 @@ body{background:#000}
   text-transform:uppercase;
   color:rgba(255,255,255,.82);
   margin-bottom:8px;
+}
+
+#miniMapCanvas{
+  display:block;
+  width:100%;
+  height:auto;
 }
 
 .bottomStatsBar{
@@ -608,5 +617,9 @@ body{background:#000}
   .bottomStatCard{ min-width:140px; }
   .controlDock{ width:min(92vw,340px); }
   .educationalBar{ width:min(92vw,680px); bottom:18px; }
-  .lowerMiniMap{ bottom:192px; }
+  .lowerMiniMap{
+    right:14px;
+    left:auto;
+    bottom:205px;
+  }
 }
