@@ -2292,3 +2292,27 @@ if ("speechSynthesis" in window) {
     console.warn("Warm init failed until user starts:", err);
   }
 })();
+
+Replace your START section in game.js with THIS:
+
+// ================================
+// SAFE START BUTTON (BULLETPROOF)
+// ================================
+
+window.addEventListener("DOMContentLoaded", () => {
+  const splash = document.getElementById("splash");
+  const startBtn = document.getElementById("startBtn");
+
+  if (!startBtn) {
+    console.error("START BUTTON NOT FOUND");
+    return;
+  }
+
+  startBtn.addEventListener("click", () => {
+    console.log("START CLICKED");
+
+    splash.style.display = "none";
+
+    startGame();
+  });
+});
