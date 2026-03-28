@@ -27,67 +27,35 @@
     #splash {
       position: fixed;
       inset: 0;
-      z-index: 10;
+      z-index: 20;
       display: flex;
       align-items: center;
       justify-content: center;
-      flex-direction: column;
       background:
-        radial-gradient(circle at center, rgba(10,30,60,0.15), rgba(0,0,0,0.12)),
+        linear-gradient(rgba(0,0,0,0.08), rgba(0,0,0,0.08)),
         url("./splash-photo.png") center center / cover no-repeat;
       overflow: hidden;
     }
 
+    /* subtle motion only, no panel */
     #splash::before {
       content: "";
       position: absolute;
-      inset: 0;
-      background: rgba(0,0,0,0.08);
-      pointer-events: none;
-    }
-
-    #splash::after {
-      content: "";
-      position: absolute;
-      inset: -4%;
+      inset: -2%;
+      background: inherit;
       background:
-        radial-gradient(circle at 18% 20%, rgba(255,212,59,0.18), transparent 22%),
-        radial-gradient(circle at 82% 18%, rgba(37,169,255,0.18), transparent 24%),
-        radial-gradient(circle at 70% 75%, rgba(125,77,255,0.16), transparent 24%);
-      pointer-events: none;
-      animation: driftGlow 12s ease-in-out infinite alternate;
-    }
-
-    .ghostBg {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      opacity: 0.14;
-      pointer-events: none;
-      transform: scale(1.16);
-    }
-
-    .ghostBg img {
-      width: min(96vw, 1300px);
-      height: auto;
-      animation: ghostPan 18s ease-in-out infinite alternate;
-    }
-
-    .startWrap {
-      position: relative;
-      z-index: 12;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 14px;
+        linear-gradient(rgba(0,0,0,0.08), rgba(0,0,0,0.08)),
+        url("./splash-photo.png") center center / cover no-repeat;
+      animation: splashPanZoom 18s ease-in-out infinite alternate;
+      z-index: 0;
     }
 
     #startBtn {
+      position: relative;
+      z-index: 2;
       border: none;
       border-radius: 999px;
-      padding: 20px 46px;
+      padding: 20px 48px;
       font-size: clamp(24px, 3vw, 38px);
       font-weight: 800;
       letter-spacing: 0.04em;
@@ -99,19 +67,12 @@
         0 14px 34px rgba(255,190,11,0.30),
         0 0 0 4px rgba(255,255,255,0.10),
         0 0 40px rgba(255,212,59,0.22);
-      transition: transform 180ms ease, box-shadow 180ms ease;
+      transition: transform 180ms ease;
       animation: pulseBtn 1.6s ease-in-out infinite;
     }
 
     #startBtn:hover {
       transform: scale(1.03);
-    }
-
-    .startHint {
-      color: rgba(255,255,255,0.92);
-      font-size: 20px;
-      font-weight: 700;
-      text-shadow: 0 2px 10px rgba(0,0,0,0.35);
     }
 
     @keyframes pulseBtn {
@@ -120,27 +81,15 @@
       100% { transform: scale(1); }
     }
 
-    @keyframes driftGlow {
-      0% { transform: translate3d(-1%, -1%, 0) scale(1); }
-      100% { transform: translate3d(1%, 1%, 0) scale(1.03); }
-    }
-
-    @keyframes ghostPan {
+    @keyframes splashPanZoom {
       0% { transform: scale(1) translate3d(0,0,0); }
-      100% { transform: scale(1.05) translate3d(-1.5%, -1%, 0); }
+      100% { transform: scale(1.05) translate3d(-1.2%, -0.8%, 0); }
     }
   </style>
 </head>
 <body>
   <div id="splash">
-    <div class="ghostBg">
-      <img src="./splash-photo.png" alt="" />
-    </div>
-
-    <div class="startWrap">
-      <button id="startBtn">Start Game</button>
-      <div class="startHint">Press Start to begin</div>
-    </div>
+    <button id="startBtn">Start Game</button>
   </div>
 
   <canvas id="gameCanvas"></canvas>
