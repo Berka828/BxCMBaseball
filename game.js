@@ -175,6 +175,71 @@ const TIPS = [
   "Watch the ball all the way in.",
   "Timing matters as much as power."
 ];
+
+const HIT_COMMENTS = {
+  homeRun: [
+    "Coach: That ball is gone!",
+    "Coach: Absolute blast!",
+    "Coach: You crushed that one!",
+    "Coach: That's a moonshot!",
+    "Coach: No doubt about it!"
+  ],
+  triple: [
+    "Coach: That's deep in the gap!",
+    "Coach: Big extra-base hit!",
+    "Coach: You're flying around the bases!",
+    "Coach: That's hammered!"
+  ],
+  double: [
+    "Coach: Nice drive into the alley!",
+    "Coach: Strong contact for two bases!",
+    "Coach: That ball was stung!",
+    "Coach: Great barrel on that one!"
+  ],
+  single: [
+    "Coach: Nice clean contact!",
+    "Coach: Way to put it in play!",
+    "Coach: Solid hit!",
+    "Coach: Nice piece of hitting!"
+  ],
+  foul: [
+    "Coach: You got a piece of it.",
+    "Coach: Foul tip. Stay with it.",
+    "Coach: Just missed squaring that up.",
+    "Coach: You're close. Stay on the ball."
+  ],
+  missEarly: [
+    "Coach: A little early. Wait on it.",
+    "Coach: You were out front on that one.",
+    "Coach: Start just a beat later."
+  ],
+  missLate: [
+    "Coach: A little late. Start sooner.",
+    "Coach: Let it travel less next time.",
+    "Coach: Quicker hands on the next one."
+  ],
+  missHigh: [
+    "Coach: Your swing was too high.",
+    "Coach: Bring the barrel down a little.",
+    "Coach: Try meeting the ball lower."
+  ],
+  missLow: [
+    "Coach: Your swing was too low.",
+    "Coach: Lift the bat a little more.",
+    "Coach: Get under the ball a bit less."
+  ]
+};
+
+const CROWD_REACTIONS = {
+  homeRun: ["CROWD ERUPTS!", "WHAT A BLAST!", "THE PLACE GOES WILD!", "HOME RUN ROAR!"],
+  bigHit: ["BIG CHEER!", "WHAT A SHOT!", "THE CROWD LOVES IT!", "THAT'S A RIPPER!"],
+  miss: ["OOOH!", "JUST MISSED!", "ALMOST!", "THE CROWD GASPS!"]
+};
+
+function randomChoice(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
 let tipIndex = 0;
 
 const stadiumBg = new Image();
@@ -842,19 +907,19 @@ function setCrowdText(text, ms = 1800) {
 function updateCrowdMood(type) {
   if (type === "home_run") {
     crowdMood = "wild";
-    setCrowdText("CROWD GOES WILD!", 2200);
+    setCrowdText(randomChoice(CROWD_REACTIONS.homeRun), 2200);
     playCheerSound();
     return;
   }
   if (type === "big_hit") {
     crowdMood = "cheer";
-    setCrowdText("BIG CHEER!", 1800);
+    setCrowdText(randomChoice(CROWD_REACTIONS.bigHit), 1800);
     playCheerSound();
     return;
   }
   if (type === "miss") {
     crowdMood = "boo";
-    setCrowdText("OOOH!", 1500);
+    setCrowdText(randomChoice(CROWD_REACTIONS.miss), 1500);
     playBooSound();
     return;
   }
@@ -1053,6 +1118,28 @@ function getFunHitText(resultLabel, distanceFt) {
   if (distanceFt >= 95) return `BIG SMASH! ${distanceFt} FT`;
   if (distanceFt >= 70) return `NICE HIT! ${distanceFt} FT`;
   return `${resultLabel} ${distanceFt} FT`;
+}
+
+function getDynamicCommentary(resultLabel, timingLabel, distanceFt) {
+  if (resultLabel === "HOME RUN!") {
+    const base = randomChoice(HIT_COMMENTS.homeRun);
+    return `${base} ${distanceFt} feet!`;
+  }
+
+  if (resultLabel === "TRIPLE!") {
+    return randomChoice(HIT_COMMENTS.triple);
+  }
+
+  if (resultLabel === "DOUBLE!") {
+    return randomChoice(HIT_COMMENTS.double);
+  }
+
+  if (resultLabel === "SINGLE!") {
+    if (timingLabel === "PERFECT!") return "Coach: Perfect timing. Nice single!";
+    return randomChoice(HIT_COMMENTS.single);
+  }
+
+  return randomChoice(HIT_COMMENTS.foul);
 }
 
 function classifyHit(power, upwardSwing) {
