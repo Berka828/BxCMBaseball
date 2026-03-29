@@ -128,7 +128,7 @@ let autoStartTriggered = false;
 const BALL_RADIUS = 14;
 const GRAVITY = 0.44;
 let CONTACT_DISTANCE = DIFFICULTIES[difficulty].contactDistance;
-const BAT_LENGTH = 132;
+const BAT_LENGTH = 190;
 
 const PLAYER_SCALE = 0.34;
 const PLAYER_TARGET_X = 0.15;
@@ -174,6 +174,10 @@ let ambientRumbleOsc = null;
 let ambientRumbleGain = null;
 let ambientCrowdInterval = null;
 let ambientRunning = false;
+let cameraZoom = 1;
+let targetCameraZoom = 1;
+let cameraZoomFrames = 0;
+let stadiumLightPhase = 0;
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
@@ -335,6 +339,47 @@ function getScaledPosePoints(pose) {
   return transformPoseToBattingPosition(rawPoints);
 }
 
+function updateCameraZoom() {
+  if (cameraZoomFrames > 0) {
+    cameraZoomFrames--;
+  } else {
+    targetCameraZoom = 1;
+  }
+
+  cameraZoom += (targetCameraZoom - cameraZoom) * 0.12;
+}
+
+function drawStadiumLights() {
+  stadiumLightPhase += 0.012;
+
+  const beam1X = canvas.width * (0.18 + Math.sin(stadiumLightPhase) * 0.08);
+  const beam2X = canvas.width * (0.78 + Math.cos(stadiumLightPhase * 0.9) * 0.08);
+
+  const grad1 = ctx.createLinearGradient(beam1X, 0, beam1X + 160, canvas.height * 0.55);
+  grad1.addColorStop(0, "rgba(255,255,255,0.13)");
+  grad1.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = grad1;
+  ctx.beginPath();
+  ctx.moveTo(beam1X, 0);
+  ctx.lineTo(beam1X + 110, 0);
+  ctx.lineTo(beam1X + 230, canvas.height * 0.58);
+  ctx.lineTo(beam1X - 60, canvas.height * 0.58);
+  ctx.closePath();
+  ctx.fill();
+
+  const grad2 = ctx.createLinearGradient(beam2X, 0, beam2X - 160, canvas.height * 0.55);
+  grad2.addColorStop(0, "rgba(255,255,255,0.10)");
+  grad2.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = grad2;
+  ctx.beginPath();
+  ctx.moveTo(beam2X, 0);
+  ctx.lineTo(beam2X - 110, 0);
+  ctx.lineTo(beam2X - 230, canvas.height * 0.58);
+  ctx.lineTo(beam2X + 60, canvas.height * 0.58);
+  ctx.closePath();
+  ctx.fill();
+}
+
 function drawBackground() {
   if (stadiumBgLoaded) {
     const imgRatio = stadiumBg.width / stadiumBg.height;
@@ -376,7 +421,8 @@ function drawBackground() {
   lowerFieldGrad.addColorStop(1, "rgba(36,145,74,0.22)");
   ctx.fillStyle = lowerFieldGrad;
   ctx.fillRect(0, canvas.height * 0.58, canvas.width, canvas.height * 0.34);
-
+  drawStadiumLights();
+  
   ctx.strokeStyle = "rgba(255,255,255,0.10)";
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -691,13 +737,24 @@ function startAmbientCrowd() {
   ambientRumbleGain.connect(ambientMasterGain);
   ambientRumbleOsc.start();
 
-  ambientCrowdInterval = setInterval(() => {
-    if (!audioCtx || !ambientRunning || !soundEnabled) return;
-    const base = 180 + Math.random() * 120;
-    tone(base, 0.25, "triangle", 0.012, 0);
-    tone(base * 1.18, 0.22, "triangle", 0.009, 0.04);
-    if (Math.random() > 0.65) tone(90 + Math.random() * 30, 0.18, "sine", 0.008, 0);
-  }, 1000);
+ambientCrowdInterval = setInterval(() => {
+  if (!audioCtx || !ambientRunning || !soundEnabled) return;
+
+  const base = 180 + Math.random() * 120;
+  tone(base, 0.25, "triangle", 0.012, 0);
+  tone(base * 1.18, 0.22, "triangle", 0.009, 0.04);
+  tone(90 + Math.random() * 30, 0.18, "sine", 0.008, 0);
+
+  if (Math.random() > 0.78) {
+    tone(520 + Math.random() * 80, 0.10, "triangle", 0.010, 0);
+    noiseBurst(0.06, 0.008);
+  }
+
+  if (Math.random() > 0.88) {
+    tone(640 + Math.random() * 100, 0.12, "triangle", 0.012, 0);
+    tone(760 + Math.random() * 120, 0.14, "triangle", 0.010, 0.05);
+  }
+}, 900);
 }
 
 function stopAmbientCrowd() {
@@ -1044,6 +1101,8 @@ function triggerHomeRunCelebration(x, y) {
   screenShakeTimer = 28;
   screenShakeAmount = 14;
   flashTimer = 14;
+  targetCameraZoom = 1.12;
+cameraZoomFrames = 22;
 
   for (let i = 0; i < 4; i++) {
     homerBursts.push({
@@ -1127,7 +1186,7 @@ function tryHit(batTip) {
 
   if (result.label === "HOME RUN!") {
     homeRuns++;
-    bronxGlowTimer = 48; 
+    bronxGlowTimer = 90; 
     playHomeRunSound();
     playHomeRunMusicBurst();
     triggerHomeRunCelebration(ball.x, ball.y);
@@ -1482,7 +1541,7 @@ function drawPitchIconsRow() {
   const r = 8;
   const rowWidth = (total - 1) * gap;
   const startX = canvas.width / 2 - rowWidth / 2;
-  const y = canvas.height - 148;
+  const y = canvas.height - 180;
 
   for (let i = 0; i < total; i++) {
     drawBaseballIcon(startX + i * gap, y, r, i < pitchesLeft);
@@ -1995,7 +2054,7 @@ function drawBatFromSide(wrist, elbow) {
 
   ctx.save();
   ctx.strokeStyle = "#4e342e";
-  ctx.lineWidth = 16;
+  ctx.lineWidth = 24;
   ctx.shadowBlur = 18;
   ctx.shadowColor = "rgba(0,0,0,0.25)";
   ctx.beginPath();
@@ -2004,7 +2063,7 @@ function drawBatFromSide(wrist, elbow) {
   ctx.stroke();
 
   ctx.strokeStyle = "#ffca28";
-  ctx.lineWidth = 8;
+  ctx.lineWidth = 12;
   ctx.shadowBlur = 16;
   ctx.shadowColor = "#ffca28";
   ctx.beginPath();
@@ -2147,7 +2206,12 @@ async function loop() {
   ctx.save();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.translate(shake.x, shake.y);
-
+  
+updateCameraZoom();
+ctx.translate(canvas.width / 2, canvas.height / 2);
+ctx.scale(cameraZoom, cameraZoom);
+ctx.translate(-canvas.width / 2, -canvas.height / 2);
+  
   drawBackground();
   drawMiniMap();
   updateIntroDecor();
