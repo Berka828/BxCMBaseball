@@ -51,6 +51,8 @@ let animationId = null;
 let gameState = "start";
 let battingSide = "right";
 
+let startInProgress = false;
+
 let score = 0;
 let hits = 0;
 let misses = 0;
@@ -2216,10 +2218,15 @@ function startCountdown() {
       playGoSound();
       if (instructionChip) instructionChip.textContent = "Let's play ball!";
       coachSay("Let's play ball!", 2000, true);
-      countdownActive = false;
-      gameState = "playing";
-      startAmbientCrowd();
-      createPitch();
+countdownActive = false;
+gameState = "playing";
+startAmbientCrowd();
+
+setTimeout(() => {
+  if (gameState === "playing" && !ball) {
+    createPitch();
+  }
+}, 500);
     }
   };
 
@@ -2246,6 +2253,13 @@ async function startOrResumeGame() {
     splashReadyForHands = true;
     hideSplashScreen();
 
+    if (startInProgress) return;
+startInProgress = true;
+...
+finally {
+  startInProgress = false;
+}
+  
     if (gameState === "paused") {
       gameState = "playing";
       if (pauseBtn) pauseBtn.textContent = "Pause";
