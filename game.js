@@ -97,6 +97,7 @@ let introChimePlayed = false;
 let turtleEntranceOffset = 180;
 let turtleFloatPhase = 0;
 let bronxIntroShimmer = 0;
+let bronxGlowTimer = 0;
 
 let roundSummary = null;
 let showRoundComplete = false;
@@ -131,7 +132,7 @@ const BAT_LENGTH = 132;
 const PLAYER_SCALE = 0.34;
 const PLAYER_TARGET_X = 0.15;
 const PLAYER_FLOOR_Y = 0.89;
-const BALL_LANE_Y = 0.61;
+const BALL_LANE_Y = 0.72;
 
 const BALL_SPAWN_X_RATIO = 0.965;
 const BALL_MISS_X_RATIO = 0.12;
@@ -1125,6 +1126,7 @@ function tryHit(batTip) {
 
   if (result.label === "HOME RUN!") {
     homeRuns++;
+    bronxGlowTimer = 48; 
     playHomeRunSound();
     playHomeRunMusicBurst();
     triggerHomeRunCelebration(ball.x, ball.y);
@@ -2157,6 +2159,30 @@ function drawMiniMap() {
   miniCtx.fillText("Batter", 12, 18);
 }
 
+function drawBronxGlow() {
+  if (bronxGlowTimer <= 0) return;
+
+  const letters = ["B", "R", "O", "N", "X"];
+  const baseX = canvas.width * 0.5 - 100;
+  const y = canvas.height * 0.12;
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.font = '900 52px "Baloo 2", sans-serif';
+
+  for (let i = 0; i < letters.length; i++) {
+    const active = bronxGlowTimer > 48 - i * 8;
+
+    ctx.fillStyle = active ? "#ffd43b" : "rgba(255,255,255,0.38)";
+    ctx.shadowBlur = active ? 20 : 0;
+    ctx.shadowColor = "#ffd43b";
+    ctx.fillText(letters[i], baseX + i * 50, y);
+  }
+
+  ctx.restore();
+  bronxGlowTimer--;
+}
+
 async function loop() {
   const shake = getShakeOffset();
 
@@ -2224,6 +2250,7 @@ async function loop() {
 
   drawCoachOverlay();
   drawCrowdOverlay();
+  drawBronxGlow();
   tickBatTrail();
 
   if (gameState === "start") drawStartOverlay();
@@ -2232,7 +2259,12 @@ async function loop() {
   if (gameState === "round_complete") drawRoundCompleteOverlay();
   if (gameState === "summary") drawSummaryOverlay();
 
+  if (gameState === "start") {
+  drawIntroBronxShimmer();
+  drawIntroTurtleMascot();
+}
   ctx.restore();
+  
   animationId = requestAnimationFrame(loop);
 }
 
