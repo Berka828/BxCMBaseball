@@ -93,6 +93,8 @@ let countdownValue = 5;
 let turtleImg = new Image();
 turtleImg.src = "./happy-turtle-cartoon-generated-by-ai_942243-2745 (1).png";
 
+let bronxGlowTimer = 0;
+
 let introChimePlayed = false;
 let turtleEntranceOffset = 180;
 let turtleFloatPhase = 0;
