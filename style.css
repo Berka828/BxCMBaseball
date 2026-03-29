@@ -505,6 +505,10 @@ body{background:#000}
   height:auto;
 }
 
+   .splashPosterWrap {
+  display: none !important;
+}
+
 .splashShine{
   position:absolute;
   inset:0;
@@ -718,10 +722,6 @@ body{background:#000}
     width:min(96vw,980px);
     border-radius:20px;
   }
-
-   .splashPosterWrap {
-  display: none !important;
-}
    
   .splashStartBtn{
     padding:16px 28px;
