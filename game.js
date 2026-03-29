@@ -98,6 +98,7 @@ let confetti = [];
 let floatingStars = [];
 let homerBursts = [];
 let homerTrailParticles = [];
+let fireworks = [];
 let batTrail = [];
 
 let pitchTimer = null;
@@ -1074,12 +1075,22 @@ function getTimingFeedback(batTip, ballObj) {
   return { label: "TOO LATE", powerBonus: 0.84, direction: 1.05 };
 }
 
-function estimateDistanceFt(power, resultLabel) {
-  let base = 20 + power * 55;
-  if (resultLabel === "DOUBLE!") base += 18;
-  if (resultLabel === "TRIPLE!") base += 34;
-  if (resultLabel === "HOME RUN!") base += 55;
-  return Math.round(clamp(base, 12, 220));
+function estimateDistanceFt(power, resultLabel, upwardSwing = 0, timingLabel = "") {
+  let base = 18 + power * 52;
+
+  if (resultLabel === "DOUBLE!") base += 16;
+  if (resultLabel === "TRIPLE!") base += 30;
+  if (resultLabel === "HOME RUN!") base += 42;
+
+  base += Math.max(0, upwardSwing) * 22;
+
+  if (timingLabel === "PERFECT!") base += 10;
+  if (timingLabel === "TOO EARLY") base -= 4;
+  if (timingLabel === "TOO LATE") base -= 2;
+
+  base += (Math.random() - 0.5) * 18;
+
+  return Math.round(clamp(base, 12, 235));
 }
 
 function getHitCommentary(resultLabel, timingLabel, distanceFt) {
@@ -1268,6 +1279,48 @@ function pointToSegmentDistance(px, py, ax, ay, bx, by) {
   return Math.hypot(px - cx, py - cy);
 }
 
+function spawnFireworkBurst(x, y, count = 26) {
+  const colors = ["#ffd54f", "#ff7043", "#42a5f5", "#66bb6a", "#ab47bc", "#ffffff"];
+
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.2;
+    const speed = 2.5 + Math.random() * 4.2;
+
+    fireworks.push({
+      x,
+      y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 22 + Math.random() * 18,
+      size: 3 + Math.random() * 4,
+      color: colors[Math.floor(Math.random() * colors.length)]
+    });
+  }
+}
+
+function updateAndDrawFireworks() {
+  for (let i = fireworks.length - 1; i >= 0; i--) {
+    const f = fireworks[i];
+    f.x += f.vx;
+    f.y += f.vy;
+    f.vx *= 0.985;
+    f.vy *= 0.985;
+    f.life--;
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(f.life / 36, 0);
+    ctx.fillStyle = f.color;
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = f.color;
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, f.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    if (f.life <= 0) fireworks.splice(i, 1);
+  }
+}
+
 function triggerHomeRunCelebration(x, y) {
   screenShakeTimer = 28;
   screenShakeAmount = 14;
@@ -1285,10 +1338,14 @@ cameraZoomFrames = 22;
     });
   }
 
-  spawnConfetti(x, y, 100);
-  spawnStars(x, y, "HOME RUN!");
-  spawnStars(x + 80, y - 40, "HOME RUN!");
-  spawnStars(x - 80, y - 20, "HOME RUN!");
+  spawnConfetti(x, y, 120);
+spawnStars(x, y, "HOME RUN!");
+spawnStars(x + 80, y - 40, "HOME RUN!");
+spawnStars(x - 80, y - 20, "HOME RUN!");
+
+spawnFireworkBurst(x, y - 40, 24);
+spawnFireworkBurst(x + 120, y - 90, 20);
+spawnFireworkBurst(x - 120, y - 70, 20);
 }
 
 function tryHit(batTip) {
@@ -1337,7 +1394,7 @@ ball.airDragY = 0.997;
 
   ball.result = result.label;
   ball.contactX = ball.x;
-  ball.estimatedDistanceFt = estimateDistanceFt(power, result.label);
+  ball.estimatedDistanceFt = estimateDistanceFt(power, result.label, upwardSwing, timing.label);
   currentDistanceFt = 0;
 
   score += result.points;
@@ -1377,7 +1434,6 @@ ball.airDragY = 0.997;
 
   if (result.label === "HOME RUN!") {
     homeRuns++;
-    bronxGlowTimer = 110; 
     playHomeRunSound();
     playHomeRunMusicBurst();
     triggerHomeRunCelebration(ball.x, ball.y);
@@ -2521,6 +2577,7 @@ ctx.translate(-canvas.width / 2, -canvas.height / 2);
     updateAndDrawStars();
     updateAndDrawHomerBursts();
     updateAndDrawHomerTrailParticles();
+    updateAndDrawFireworks();
     drawHitOverlay();
     drawDistanceOverlay();
     drawMissOverlay();
@@ -2530,6 +2587,7 @@ ctx.translate(-canvas.width / 2, -canvas.height / 2);
     updateAndDrawStars();
     updateAndDrawHomerBursts();
     updateAndDrawHomerTrailParticles();
+    updateAndDrawFireworks();
     drawHitOverlay();
     drawDistanceOverlay();
     drawMissOverlay();
@@ -2541,7 +2599,6 @@ ctx.translate(-canvas.width / 2, -canvas.height / 2);
 
   drawCoachOverlay();
   drawCrowdOverlay();
-  drawBronxGlow();
   tickBatTrail();
 
   if (gameState === "start") drawStartOverlay();
