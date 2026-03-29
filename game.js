@@ -88,6 +88,14 @@ let summaryTimer = null;
 let countdownActive = false;
 let countdownValue = 5;
 
+let turtleImg = new Image();
+turtleImg.src = "./happy-turtle-cartoon-generated-by-ai_942243-2745 (1).png";
+
+let introChimePlayed = false;
+let turtleEntranceOffset = 180;
+let turtleFloatPhase = 0;
+let bronxIntroShimmer = 0;
+
 let roundSummary = null;
 let showRoundComplete = false;
 let roundCompleteTimer = 0;
@@ -506,6 +514,87 @@ function playPowerMeterBlip(power) {
   if (power < 0.35) return;
   const freq = 220 + power * 260;
   tone(freq, 0.035, "triangle", 0.035, 0);
+}
+
+function playIntroStadiumChime() {
+  if (!soundEnabled) return;
+  initAudio();
+  if (!audioCtx) return;
+
+  tone(523.25, 0.10, "triangle", 0.08, 0);
+  tone(659.25, 0.12, "triangle", 0.08, 0.08);
+  tone(783.99, 0.16, "triangle", 0.07, 0.18);
+}
+
+function updateIntroDecor() {
+  if (gameState !== "start") return;
+
+  if (!introChimePlayed) {
+    introChimePlayed = true;
+    playIntroStadiumChime();
+  }
+
+  turtleEntranceOffset += (0 - turtleEntranceOffset) * 0.06;
+  turtleFloatPhase += 0.04;
+  bronxIntroShimmer += 0.025;
+}
+
+function drawIntroBronxShimmer() {
+  if (gameState !== "start") return;
+
+  const letters = ["B", "R", "O", "N", "X"];
+  const baseX = canvas.width * 0.5 - 100;
+  const y = canvas.height * 0.18;
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.font = '900 46px "Baloo 2", sans-serif';
+
+  for (let i = 0; i < letters.length; i++) {
+    const shimmer = Math.sin(bronxIntroShimmer * 2 + i * 0.6);
+    const glow = Math.max(0, shimmer);
+
+    ctx.fillStyle = glow > 0.65 ? "#ffd43b" : "rgba(255,255,255,0.72)";
+    ctx.shadowBlur = glow > 0.65 ? 18 : 0;
+    ctx.shadowColor = "#ffd43b";
+    ctx.fillText(letters[i], baseX + i * 50, y);
+  }
+
+  ctx.restore();
+}
+
+function drawIntroTurtleMascot() {
+  if (gameState !== "start") return;
+  if (!turtleImg.complete) return;
+
+  const w = 150;
+  const h = 150;
+  const x = canvas.width - 190 + turtleEntranceOffset;
+  const y = canvas.height - 210 + Math.sin(turtleFloatPhase) * 8;
+
+  ctx.save();
+  ctx.globalAlpha = 0.95;
+  ctx.shadowBlur = 22;
+  ctx.shadowColor = "rgba(255,212,59,0.28)";
+  ctx.drawImage(turtleImg, x, y, w, h);
+  ctx.restore();
+
+  // little speech bubble vibe
+  ctx.save();
+  ctx.globalAlpha = clamp(1 - turtleEntranceOffset / 180, 0, 1);
+  ctx.fillStyle = "rgba(8,18,40,0.78)";
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(x - 170, y + 16, 150, 46, 18);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 16px "Nunito", sans-serif';
+  ctx.textAlign = "center";
+  ctx.fillText("Ready to play?", x - 95, y + 45);
+  ctx.restore();
 }
 
 function setupIntroMusic() {
@@ -2033,6 +2122,9 @@ async function loop() {
 
   drawBackground();
   drawMiniMap();
+  updateIntroDecor();
+drawIntroBronxShimmer();
+drawIntroTurtleMascot();
 
   let pose = null;
   if (detector && (gameState === "playing" || gameState === "countdown" || gameState === "start")) {
@@ -2166,6 +2258,8 @@ async function startOrResumeGame() {
       return;
     }
 
+    introChimePlayed = true;
+    
     resetRound();
     if (pauseBtn) pauseBtn.textContent = "Pause";
     playStartSound();
@@ -2235,6 +2329,11 @@ async function resetGame() {
     window.speechSynthesis.cancel();
   }
 
+  introChimePlayed = false;
+turtleEntranceOffset = 180;
+turtleFloatPhase = 0;
+bronxIntroShimmer = 0;
+  
   resetRound();
   splashReadyForHands = true;
   gameState = "start";
