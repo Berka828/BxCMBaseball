@@ -132,7 +132,7 @@ const BAT_LENGTH = 132;
 const PLAYER_SCALE = 0.34;
 const PLAYER_TARGET_X = 0.15;
 const PLAYER_FLOOR_Y = 0.89;
-const BALL_LANE_Y = 0.72;
+const BALL_LANE_Y = 0.66;
 
 const BALL_SPAWN_X_RATIO = 0.965;
 const BALL_MISS_X_RATIO = 0.12;
