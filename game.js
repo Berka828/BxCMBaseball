@@ -2039,24 +2039,48 @@ function checkForRaisedHandsStart(points) {
   }
 }
 
-async function setupCamera() {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: {
-      facingMode: "user",
-      width: { ideal: 1280 },
-      height: { ideal: 720 }
-    },
-    audio: false
-  });
+async function startOrResumeGame() {
+  if (startInProgress) return;
+  startInProgress = true;
 
-  video.srcObject = stream;
+  try {
+    initAudio();
 
-  await new Promise(resolve => {
-    video.onloadedmetadata = () => resolve();
-  });
+    if (!introMusicStarted) {
+      await playIntroMusic();
+    }
 
-  await video.play();
-  resizeCanvas();
+    await ensureVisionReady();
+
+    splashReadyForHands = true;
+    hideSplashScreen();
+
+    if (gameState === "paused") {
+      gameState = "playing";
+      if (pauseBtn) pauseBtn.textContent = "Pause";
+      if (instructionChip) instructionChip.textContent = "Game resumed.";
+      hideControlsPanel();
+      startAmbientCrowd();
+      if (!ball) scheduleNextPitch();
+      playStartSound();
+      if (!animationId) loop();
+      return;
+    }
+
+    introChimePlayed = true;
+
+    resetRound();
+    if (pauseBtn) pauseBtn.textContent = "Pause";
+    playStartSound();
+    startCountdown();
+
+    if (!animationId) loop();
+  } catch (err) {
+    console.error("START ERROR:", err);
+    alert("Start failed: " + err.message);
+  } finally {
+    startInProgress = false;
+  }
 }
 
 async function loadModel() {
