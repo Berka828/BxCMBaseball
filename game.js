@@ -2082,7 +2082,25 @@ async function startOrResumeGame() {
     startInProgress = false;
   }
 }
+async function setupCamera() {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: "user",
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    },
+    audio: false
+  });
 
+  video.srcObject = stream;
+
+  await new Promise(resolve => {
+    video.onloadedmetadata = () => resolve();
+  });
+
+  await video.play();
+  resizeCanvas();
+}
 async function loadModel() {
   await tf.ready();
   detector = await poseDetection.createDetector(
