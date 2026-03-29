@@ -99,7 +99,6 @@ let introChimePlayed = false;
 let turtleEntranceOffset = 180;
 let turtleFloatPhase = 0;
 let bronxIntroShimmer = 0;
-let bronxGlowTimer = 0;
 
 let roundSummary = null;
 let showRoundComplete = false;
@@ -2043,49 +2042,6 @@ function checkForRaisedHandsStart(points) {
   }
 }
 
-async function startOrResumeGame() {
-  if (startInProgress) return;
-  startInProgress = true;
-
-  try {
-    initAudio();
-
-    if (!introMusicStarted) {
-      await playIntroMusic();
-    }
-
-    await ensureVisionReady();
-
-    splashReadyForHands = true;
-    hideSplashScreen();
-
-    if (gameState === "paused") {
-      gameState = "playing";
-      if (pauseBtn) pauseBtn.textContent = "Pause";
-      if (instructionChip) instructionChip.textContent = "Game resumed.";
-      hideControlsPanel();
-      startAmbientCrowd();
-      if (!ball) scheduleNextPitch();
-      playStartSound();
-      if (!animationId) loop();
-      return;
-    }
-
-    introChimePlayed = true;
-
-    resetRound();
-    if (pauseBtn) pauseBtn.textContent = "Pause";
-    playStartSound();
-    startCountdown();
-
-    if (!animationId) loop();
-  } catch (err) {
-    console.error("START ERROR:", err);
-    alert("Start failed: " + err.message);
-  } finally {
-    startInProgress = false;
-  }
-}
 async function setupCamera() {
   const stream = await navigator.mediaDevices.getUserMedia({
     video: {
