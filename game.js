@@ -1017,6 +1017,36 @@ function estimateDistanceFt(power, resultLabel) {
   return Math.round(clamp(base, 12, 220));
 }
 
+function getHitCommentary(resultLabel, timingLabel, distanceFt) {
+  if (resultLabel === "HOME RUN!") {
+    if (timingLabel === "PERFECT!") return `Coach: Perfect timing! That's gone! ${distanceFt} feet!`;
+    if (timingLabel === "TOO EARLY") return `Coach: You got out in front and still crushed it! ${distanceFt} feet!`;
+    return `Coach: You stayed on it and launched it! ${distanceFt} feet!`;
+  }
+
+  if (resultLabel === "TRIPLE!") {
+    if (timingLabel === "PERFECT!") return `Coach: Perfect barrel. That's deep into the gap!`;
+    return `Coach: Big swing. That's extra bases!`;
+  }
+
+  if (resultLabel === "DOUBLE!") {
+    if (timingLabel === "TOO EARLY") return `Coach: A little early, but you drove it hard!`;
+    if (timingLabel === "TOO LATE") return `Coach: Late hands, but strong contact!`;
+    return `Coach: Nice solid shot. That's a double!`;
+  }
+
+  if (resultLabel === "SINGLE!") {
+    if (timingLabel === "PERFECT!") return `Coach: Nice contact. You squared it up.`;
+    if (timingLabel === "TOO EARLY") return `Coach: Early swing, but you still found it.`;
+    if (timingLabel === "TOO LATE") return `Coach: A little late, but you got a piece of it.`;
+    return `Coach: Nice job putting the bat on the ball.`;
+  }
+
+  if (timingLabel === "TOO EARLY") return `Coach: You were early. Wait a beat longer next time.`;
+  if (timingLabel === "TOO LATE") return `Coach: Late swing. Start a little sooner.`;
+  return `Coach: You got a piece of it. Stay with the ball.`;
+}
+
 function getFunHitText(resultLabel, distanceFt) {
   if (resultLabel === "HOME RUN!") return `HOME RUN! ${distanceFt} FT`;
   if (distanceFt >= 130) return `ROCKET BALL! ${distanceFt} FT`;
@@ -1026,11 +1056,19 @@ function getFunHitText(resultLabel, distanceFt) {
 }
 
 function classifyHit(power, upwardSwing) {
-  if (power > 1.9 && upwardSwing > 0.6) return { label: "HOME RUN!", points: 80, confettiCount: 42, launchBoost: 1.28 };
-  if (power > 1.5 && upwardSwing > 0.25) return { label: "TRIPLE!", points: 45, confettiCount: 24, launchBoost: 1.02 };
-  if (power > 1.08) return { label: "DOUBLE!", points: 28, confettiCount: 16, launchBoost: 0.88 };
-  if (power > 0.66) return { label: "SINGLE!", points: 16, confettiCount: 10, launchBoost: 0.72 };
-  return { label: "FOUL TIP!", points: 8, confettiCount: 6, launchBoost: 0.54 };
+  if (power > 2.0 && upwardSwing > 0.78) {
+    return { label: "HOME RUN!", points: 80, confettiCount: 42, launchBoost: 1.18 };
+  }
+  if (power > 1.55 && upwardSwing > 0.42) {
+    return { label: "TRIPLE!", points: 45, confettiCount: 24, launchBoost: 0.98 };
+  }
+  if (power > 1.10) {
+    return { label: "DOUBLE!", points: 28, confettiCount: 16, launchBoost: 0.84 };
+  }
+  if (power > 0.72) {
+    return { label: "SINGLE!", points: 16, confettiCount: 10, launchBoost: 0.68 };
+  }
+  return { label: "FOUL TIP!", points: 8, confettiCount: 6, launchBoost: 0.50 };
 }
 
 function createPitch() {
@@ -1226,7 +1264,7 @@ ball.airDragY = 0.997;
     timingTextTimer = Math.round((HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
     distanceText = `${ball.estimatedDistanceFt} FT`;
     distanceTextTimer = Math.round((HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
-    coachSay("Coach: Boom! That's your power swing!", 3000, true);
+    coachSay(getHitCommentary(result.label, timing.label, ball.estimatedDistanceFt), 3200, true);
     updateCrowdMood("home_run");
   } else if (result.label === "TRIPLE!" || result.label === "DOUBLE!") {
     hitText = getFunHitText(result.label, ball.estimatedDistanceFt);
@@ -1235,7 +1273,7 @@ ball.airDragY = 0.997;
     timingTextTimer = Math.round((BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
     distanceText = `${ball.estimatedDistanceFt} FT`;
     distanceTextTimer = Math.round((BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
-    coachSay("Coach: Nice barrel. Great contact.", 2600, true);
+    coachSay(getHitCommentary(result.label, timing.label, ball.estimatedDistanceFt), 2800, true);
     updateCrowdMood("big_hit");
   } else {
     hitText = getFunHitText(result.label, ball.estimatedDistanceFt);
@@ -1244,7 +1282,7 @@ ball.airDragY = 0.997;
     timingTextTimer = Math.round((HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
     distanceText = `${ball.estimatedDistanceFt} FT`;
     distanceTextTimer = Math.round((HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
-    coachSay("Coach: Nice swing. Keep that timing.", 2200, false);
+    coachSay(getHitCommentary(result.label, timing.label, ball.estimatedDistanceFt), 2400, true);
   }
 
   spawnConfetti(ball.x, ball.y, result.confettiCount);
@@ -1446,7 +1484,7 @@ function updateBatVelocity(point) {
   batVelocity = { x: vx, y: vy, speed: Math.hypot(vx, vy) };
   prevBatPoint = { ...point, t: now };
 
-  const power = clamp(batVelocity.speed / 750, 0, 1);
+  const power = clamp(batVelocity.speed / 850, 0, 1);
   swingPowerDisplay += (power - swingPowerDisplay) * 0.35;
   swingPowerPeak = Math.max(swingPowerPeak * 0.96, swingPowerDisplay);
 
@@ -1482,46 +1520,39 @@ function drawBatTrail() {
 }
 
 function drawSwingPowerMeter() {
-  const x = canvas.width - 70;
-  const y = canvas.height * 0.22;
-  const w = 26;
-  const h = 220;
-  const bulbR = 18;
+  const x = 26;
+  const y = canvas.height * 0.24;
+  const w = 14;
+  const h = 150;
+  const r = 10;
 
   ctx.save();
 
-  ctx.fillStyle = "rgba(10,20,40,0.72)";
+  // outer track
+  ctx.fillStyle = "rgba(10,20,40,0.55)";
   ctx.beginPath();
-  ctx.roundRect(x, y, w, h, 16);
+  ctx.roundRect(x, y, w, h, r);
   ctx.fill();
 
+  // fill
   const fillH = h * clamp(swingPowerPeak, 0, 1);
   const fillY = y + h - fillH;
 
   const grad = ctx.createLinearGradient(0, y + h, 0, y);
   grad.addColorStop(0, "#2ed573");
-  grad.addColorStop(0.5, "#ffd43b");
+  grad.addColorStop(0.55, "#ffd43b");
   grad.addColorStop(1, "#ff7043");
 
   ctx.fillStyle = grad;
   ctx.beginPath();
-  ctx.roundRect(x + 4, fillY, w - 8, fillH, 12);
+  ctx.roundRect(x + 2, fillY, w - 4, fillH, 8);
   ctx.fill();
 
-  ctx.beginPath();
-  ctx.arc(x + w / 2, y + h + 18, bulbR, 0, Math.PI * 2);
-  ctx.fillStyle = grad;
-  ctx.fill();
-
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = "rgba(255,255,255,0.28)";
-  ctx.stroke();
-
-  ctx.fillStyle = "#ffffff";
-  ctx.font = '900 12px "Nunito", sans-serif';
-  ctx.textAlign = "center";
-  ctx.fillText("SWING", x + w / 2, y - 12);
-  ctx.fillText("POWER", x + w / 2, y + h + 48);
+  // subtle label
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.font = '900 10px "Nunito", sans-serif';
+  ctx.textAlign = "left";
+  ctx.fillText("POWER", x - 2, y - 10);
 
   ctx.restore();
 }
@@ -1607,7 +1638,7 @@ function drawPitchIconsRow() {
   const r = 8;
   const rowWidth = (total - 1) * gap;
   const startX = canvas.width / 2 - rowWidth / 2;
-  const y = canvas.height - 180;
+  const y = canvas.height - 205;
 
   for (let i = 0; i < total; i++) {
     drawBaseballIcon(startX + i * gap, y, r, i < pitchesLeft);
