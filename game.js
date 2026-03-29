@@ -45,6 +45,21 @@ const DIFFICULTIES = {
   hard: { pitchSpeed: 9.5, swingThreshold: 500, pitchDelay: 3.2, ballScale: 1.00, contactDistance: 62 }
 };
 
+const MODES = {
+  kid: {
+    contactBoost: 1.18,
+    powerBoost: 1.10,
+    gravityBoost: 0.92,
+    label: "KID MODE"
+  },
+  pro: {
+    contactBoost: 0.96,
+    powerBoost: 1.00,
+    gravityBoost: 1.06,
+    label: "PRO MODE"
+  }
+};
+
 let difficulty = "medium";
 let detector = null;
 let animationId = null;
@@ -120,6 +135,11 @@ let crowdMood = "quiet";
 
 let swingPowerDisplay = 0;
 let swingPowerPeak = 0;
+let arcadeMode = "kid";
+let streakCount = 0;
+let streakTimer = 0;
+let streakText = "";
+let streakTextTimer = 0;
 
 let splashReadyForHands = false;
 let handRaiseHoldMs = 0;
@@ -129,7 +149,7 @@ let autoStartTriggered = false;
 const BALL_RADIUS = 14;
 const GRAVITY = 0.44;
 let CONTACT_DISTANCE = DIFFICULTIES[difficulty].contactDistance;
-const BAT_LENGTH = 190;
+const BAT_LENGTH = 150;
 
 const PLAYER_SCALE = 0.34;
 const PLAYER_TARGET_X = 0.15;
@@ -182,6 +202,15 @@ let stadiumLightPhase = 0;
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v));
+}
+
+function setArcadeMode(mode) {
+  arcadeMode = mode;
+  if (instructionChip) {
+    instructionChip.textContent = mode === "kid"
+      ? "Kid Mode on: bigger contact zone, easier launch."
+      : "Pro Mode on: tighter contact, more demanding timing.";
+  }
 }
 
 function setDifficulty(level) {
@@ -1153,12 +1182,13 @@ const segmentDistance = lastBatSegment
     )
   : tipDistance;
 
-if (Math.min(tipDistance, segmentDistance) > CONTACT_DISTANCE) return;
-
+const modeContactDistance = CONTACT_DISTANCE * MODES[arcadeMode].contactBoost;
+if (Math.min(tipDistance, segmentDistance) > modeContactDistance) return;
+  
   ball.hit = true;
 
   const timing = getTimingFeedback(batTip, ball);
-  let power = clamp(batVelocity.speed / 700, 0.35, 2.1);
+let power = clamp((batVelocity.speed / 700) * MODES[arcadeMode].powerBoost, 0.35, 2.25);
   power *= timing.powerBonus;
 
   const upwardSwing = clamp((-batVelocity.y) / 700, -0.4, 1.0);
@@ -1171,7 +1201,12 @@ if (Math.min(tipDistance, segmentDistance) > CONTACT_DISTANCE) return;
   ball.vx = lateral * baseVX * result.launchBoost * timing.direction + (Math.random() - 0.5) * 1.0;
 ball.vy = baseVY * result.launchBoost + (Math.random() - 0.5) * 0.8;
 
-ball.gravityScale = clamp(0.86 - upwardSwing * 0.18 - power * 0.05, 0.58, 0.88);
+ball.gravityScale = clamp(
+  (0.86 - upwardSwing * 0.18 - power * 0.05) * MODES[arcadeMode].gravityBoost,
+  0.55,
+  0.92
+);
+  
 ball.airDragX = clamp(0.996 - power * 0.0005, 0.991, 0.996);
 ball.airDragY = 0.997;
 
@@ -2092,7 +2127,7 @@ function drawBatFromSide(wrist, elbow) {
   
   ctx.save();
   ctx.strokeStyle = "#4e342e";
-  ctx.lineWidth = 24;
+  ctx.lineWidth = 32;
   ctx.shadowBlur = 18;
   ctx.shadowColor = "rgba(0,0,0,0.25)";
   ctx.beginPath();
@@ -2101,13 +2136,26 @@ function drawBatFromSide(wrist, elbow) {
   ctx.stroke();
 
   ctx.strokeStyle = "#ffca28";
-  ctx.lineWidth = 12;
+  ctx.lineWidth = 18;
   ctx.shadowBlur = 16;
   ctx.shadowColor = "#ffca28";
-  ctx.beginPath();
-  ctx.moveTo(wrist.x, wrist.y);
-  ctx.lineTo(batTip.x, batTip.y);
-  ctx.stroke();
+  // Draw bat with taper (handle → barrel)
+const midX = wrist.x + (batTip.x - wrist.x) * 0.6;
+const midY = wrist.y + (batTip.y - wrist.y) * 0.6;
+
+// Handle (thinner)
+ctx.lineWidth = 18;
+ctx.beginPath();
+ctx.moveTo(wrist.x, wrist.y);
+ctx.lineTo(midX, midY);
+ctx.stroke();
+
+// Barrel (thicker)
+ctx.lineWidth = 34;
+ctx.beginPath();
+ctx.moveTo(midX, midY);
+ctx.lineTo(batTip.x, batTip.y);
+ctx.stroke();
   ctx.restore();
 
   return batTip;
@@ -2521,6 +2569,13 @@ window.addEventListener("keydown", (e) => {
     if (gameState === "playing" || gameState === "countdown") togglePause();
     else if (gameState === "paused") togglePause();
   }
+    if (e.key === "k" || e.key === "K") {
+    setArcadeMode("kid");
+  }
+
+  if (e.key === "p" || e.key === "P") {
+    setArcadeMode("pro");
+  }
 });
 
 if (rightHandBtn) {
@@ -2542,6 +2597,7 @@ if (leftHandBtn) {
 }
 
 setDifficulty("medium");
+setArcadeMode("kid");
 updateHud();
 resizeCanvas();
 
