@@ -1638,7 +1638,7 @@ function drawPitchIconsRow() {
   const r = 8;
   const rowWidth = (total - 1) * gap;
   const startX = canvas.width / 2 - rowWidth / 2;
-  const y = canvas.height - 205;
+  const y = canvas.height - 220;
 
   for (let i = 0; i < total; i++) {
     drawBaseballIcon(startX + i * gap, y, r, i < pitchesLeft);
