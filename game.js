@@ -2149,8 +2149,6 @@ async function loop() {
   drawBackground();
   drawMiniMap();
   updateIntroDecor();
-drawIntroBronxShimmer();
-drawIntroTurtleMascot();
 
   let pose = null;
   if (detector && (gameState === "playing" || gameState === "countdown" || gameState === "start")) {
@@ -2265,6 +2263,9 @@ async function ensureVisionReady() {
 }
 
 async function startOrResumeGame() {
+  if (startInProgress) return;
+  startInProgress = true;
+
   try {
     initAudio();
 
@@ -2277,13 +2278,6 @@ async function startOrResumeGame() {
     splashReadyForHands = true;
     hideSplashScreen();
 
-    if (startInProgress) return;
-startInProgress = true;
-...
-finally {
-  startInProgress = false;
-}
-  
     if (gameState === "paused") {
       gameState = "playing";
       if (pauseBtn) pauseBtn.textContent = "Pause";
@@ -2297,7 +2291,7 @@ finally {
     }
 
     introChimePlayed = true;
-    
+
     resetRound();
     if (pauseBtn) pauseBtn.textContent = "Pause";
     playStartSound();
@@ -2307,6 +2301,8 @@ finally {
   } catch (err) {
     console.error("START ERROR:", err);
     alert("Start failed: " + err.message);
+  } finally {
+    startInProgress = false;
   }
 }
 
