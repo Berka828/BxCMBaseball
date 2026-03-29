@@ -1290,7 +1290,7 @@ ball.airDragY = 0.997;
 
   if (result.label === "HOME RUN!") {
     homeRuns++;
-    bronxGlowTimer = 90; 
+    bronxGlowTimer = 110; 
     playHomeRunSound();
     playHomeRunMusicBurst();
     triggerHomeRunCelebration(ball.x, ball.y);
@@ -2149,44 +2149,106 @@ function drawBatFromSide(wrist, elbow) {
     y: wrist.y + uy * BAT_LENGTH
   };
 
+  const handleEnd = {
+    x: wrist.x + ux * (BAT_LENGTH * 0.30),
+    y: wrist.y + uy * (BAT_LENGTH * 0.30)
+  };
+
+  const barrelStart = {
+    x: wrist.x + ux * (BAT_LENGTH * 0.42),
+    y: wrist.y + uy * (BAT_LENGTH * 0.42)
+  };
+
+  const knob = {
+    x: wrist.x - ux * 8,
+    y: wrist.y - uy * 8
+  };
+
+  const nx = -uy;
+  const ny = ux;
+
   lastBatSegment = {
-  ax: wrist.x,
-  ay: wrist.y,
-  bx: batTip.x,
-  by: batTip.y
-};
-  
+    ax: wrist.x,
+    ay: wrist.y,
+    bx: batTip.x,
+    by: batTip.y
+  };
+
   ctx.save();
-  ctx.strokeStyle = "#4e342e";
-  ctx.lineWidth = 32;
-  ctx.shadowBlur = 18;
-  ctx.shadowColor = "rgba(0,0,0,0.25)";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // handle
+  ctx.strokeStyle = "#6d4c41";
+  ctx.lineWidth = 12;
+  ctx.shadowBlur = 8;
+  ctx.shadowColor = "rgba(0,0,0,0.18)";
   ctx.beginPath();
-  ctx.moveTo(wrist.x, wrist.y);
+  ctx.moveTo(knob.x, knob.y);
+  ctx.lineTo(handleEnd.x, handleEnd.y);
+  ctx.stroke();
+
+  // grip accent using Bronx colors
+  ctx.strokeStyle = "#25a9ff";
+  ctx.lineWidth = 5;
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.moveTo(wrist.x + nx * 2, wrist.y + ny * 2);
+  ctx.lineTo(handleEnd.x + nx * 2, handleEnd.y + ny * 2);
+  ctx.stroke();
+
+  ctx.strokeStyle = "#ffd43b";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(wrist.x - nx * 2, wrist.y - ny * 2);
+  ctx.lineTo(handleEnd.x - nx * 2, handleEnd.y - ny * 2);
+  ctx.stroke();
+
+  // barrel
+  ctx.strokeStyle = "#c68a3a";
+  ctx.lineWidth = 22;
+  ctx.shadowBlur = 14;
+  ctx.shadowColor = "rgba(255,202,40,0.18)";
+  ctx.beginPath();
+  ctx.moveTo(barrelStart.x, barrelStart.y);
   ctx.lineTo(batTip.x, batTip.y);
   ctx.stroke();
 
-  ctx.strokeStyle = "#ffca28";
-  ctx.lineWidth = 18;
-  ctx.shadowBlur = 16;
-  ctx.shadowColor = "#ffca28";
-  // Draw bat with taper (handle → barrel)
-const midX = wrist.x + (batTip.x - wrist.x) * 0.6;
-const midY = wrist.y + (batTip.y - wrist.y) * 0.6;
+  // barrel highlight
+  ctx.strokeStyle = "#ffe082";
+  ctx.lineWidth = 8;
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.moveTo(barrelStart.x - nx * 3, barrelStart.y - ny * 3);
+  ctx.lineTo(batTip.x - nx * 3, batTip.y - ny * 3);
+  ctx.stroke();
 
-// Handle (thinner)
-ctx.lineWidth = 18;
-ctx.beginPath();
-ctx.moveTo(wrist.x, wrist.y);
-ctx.lineTo(midX, midY);
-ctx.stroke();
+  // small BX accent band near barrel
+  const bandCenter = {
+    x: wrist.x + ux * (BAT_LENGTH * 0.66),
+    y: wrist.y + uy * (BAT_LENGTH * 0.66)
+  };
 
-// Barrel (thicker)
-ctx.lineWidth = 34;
-ctx.beginPath();
-ctx.moveTo(midX, midY);
-ctx.lineTo(batTip.x, batTip.y);
-ctx.stroke();
+  ctx.strokeStyle = "#7d4dff";
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(bandCenter.x - nx * 10, bandCenter.y - ny * 10);
+  ctx.lineTo(bandCenter.x + nx * 10, bandCenter.y + ny * 10);
+  ctx.stroke();
+
+  ctx.strokeStyle = "#25a9ff";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(bandCenter.x - nx * 5, bandCenter.y - ny * 5);
+  ctx.lineTo(bandCenter.x + nx * 5, bandCenter.y + ny * 5);
+  ctx.stroke();
+
+  // knob
+  ctx.fillStyle = "#5d4037";
+  ctx.beginPath();
+  ctx.arc(knob.x, knob.y, 7, 0, Math.PI * 2);
+  ctx.fill();
+
   ctx.restore();
 
   return batTip;
@@ -2200,8 +2262,8 @@ function checkForRaisedHandsStart(points) {
   const dt = now - lastRaiseCheckTime;
   lastRaiseCheckTime = now;
 
-  const rightRaised = points.rightWrist && points.rightShoulder && points.rightWrist.y < points.rightShoulder.y - 18;
-  const leftRaised = points.leftWrist && points.leftShoulder && points.leftWrist.y < points.leftShoulder.y - 18;
+  const rightRaised = points.rightWrist && points.rightShoulder && points.rightWrist.y < points.rightShoulder.y - 6;
+  const leftRaised = points.leftWrist && points.leftShoulder && points.leftWrist.y < points.leftShoulder.y - 6;
   const bothRaised = rightRaised && leftRaised;
 
   if (bothRaised) {
@@ -2211,7 +2273,7 @@ function checkForRaisedHandsStart(points) {
     handRaiseHoldMs = 0;
   }
 
-  if (handRaiseHoldMs > 950) {
+  if (handRaiseHoldMs > 650) {
     autoStartTriggered = true;
     handRaiseHoldMs = 0;
     startOrResumeGame();
@@ -2297,20 +2359,23 @@ function drawBronxGlow() {
   if (bronxGlowTimer <= 0) return;
 
   const letters = ["B", "R", "O", "N", "X"];
-  const baseX = canvas.width * 0.5 - 100;
-  const y = canvas.height * 0.12;
+  const spacing = canvas.width * 0.08;
+  const totalWidth = spacing * (letters.length - 1);
+  const startX = canvas.width * 0.5 - totalWidth / 2;
+  const y = canvas.height * 0.28;
 
   ctx.save();
   ctx.textAlign = "center";
-  ctx.font = '900 52px "Baloo 2", sans-serif';
+  ctx.font = `900 ${Math.floor(canvas.width * 0.09)}px "Baloo 2", sans-serif`;
 
   for (let i = 0; i < letters.length; i++) {
-    const active = bronxGlowTimer > 48 - i * 8;
+    const active = bronxGlowTimer > 90 - i * 14;
 
-    ctx.fillStyle = active ? "#ffd43b" : "rgba(255,255,255,0.38)";
-    ctx.shadowBlur = active ? 20 : 0;
+    ctx.fillStyle = active ? "#ffd43b" : "rgba(255,255,255,0.08)";
+    ctx.shadowBlur = active ? 36 : 0;
     ctx.shadowColor = "#ffd43b";
-    ctx.fillText(letters[i], baseX + i * 50, y);
+
+    ctx.fillText(letters[i], startX + i * spacing, y);
   }
 
   ctx.restore();
