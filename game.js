@@ -66,6 +66,7 @@ let currentDistanceFt = 0;
 let prevBatPoint = null;
 let batVelocity = { x: 0, y: 0, speed: 0 };
 let lastBatTip = null;
+let lastBatSegment = null;
 
 let ball = null;
 let hitText = "";
@@ -1097,6 +1098,22 @@ function spawnStars(x, y, label) {
   }
 }
 
+function pointToSegmentDistance(px, py, ax, ay, bx, by) {
+  const abx = bx - ax;
+  const aby = by - ay;
+  const apx = px - ax;
+  const apy = py - ay;
+  const abLenSq = abx * abx + aby * aby || 1;
+
+  let t = (apx * abx + apy * aby) / abLenSq;
+  t = clamp(t, 0, 1);
+
+  const cx = ax + abx * t;
+  const cy = ay + aby * t;
+
+  return Math.hypot(px - cx, py - cy);
+}
+
 function triggerHomeRunCelebration(x, y) {
   screenShakeTimer = 28;
   screenShakeAmount = 14;
@@ -1124,9 +1141,19 @@ function tryHit(batTip) {
   if (!ball || !ball.active || ball.hit) return;
   if (ball.x < canvas.width * 0.22) return;
 
-  const d = Math.hypot(ball.x - batTip.x, ball.y - batTip.y);
-  if (d > CONTACT_DISTANCE) return;
-  if (batVelocity.speed < parseFloat(swingThresholdSlider?.value || "420")) return;
+  const tipDistance = Math.hypot(ball.x - batTip.x, ball.y - batTip.y);
+const segmentDistance = lastBatSegment
+  ? pointToSegmentDistance(
+      ball.x,
+      ball.y,
+      lastBatSegment.ax,
+      lastBatSegment.ay,
+      lastBatSegment.bx,
+      lastBatSegment.by
+    )
+  : tipDistance;
+
+if (Math.min(tipDistance, segmentDistance) > CONTACT_DISTANCE) return;
 
   ball.hit = true;
 
@@ -1141,8 +1168,12 @@ function tryHit(batTip) {
   const baseVX = 9 + power * 8;
   const baseVY = -(4 + Math.max(0, upwardSwing) * 7 + power * 2.2);
 
-  ball.vx = lateral * baseVX * result.launchBoost * timing.direction + (Math.random() - 0.5) * 1.2;
-  ball.vy = baseVY * result.launchBoost + (Math.random() - 0.5) * 1.0;
+  ball.vx = lateral * baseVX * result.launchBoost * timing.direction + (Math.random() - 0.5) * 1.0;
+ball.vy = baseVY * result.launchBoost + (Math.random() - 0.5) * 0.8;
+
+ball.gravityScale = clamp(0.86 - upwardSwing * 0.18 - power * 0.05, 0.58, 0.88);
+ball.airDragX = clamp(0.996 - power * 0.0005, 0.991, 0.996);
+ball.airDragY = 0.997;
 
   ball.result = result.label;
   ball.contactX = ball.x;
@@ -1292,11 +1323,11 @@ function updateBall() {
 
     if (ball.x < canvas.width * BALL_MISS_X_RATIO) resolveMiss();
   } else {
-    ball.vy += GRAVITY;
-    ball.vx *= 0.992;
-    ball.vy *= 0.996;
-    ball.x += ball.vx;
-    ball.y += ball.vy;
+   ball.vy += GRAVITY * (ball.gravityScale || 1);
+ball.vx *= (ball.airDragX || 0.992);
+ball.vy *= (ball.airDragY || 0.996);
+ball.x += ball.vx;
+ball.y += ball.vy;
 
     ball.trail.push({ x: ball.x, y: ball.y, a: 0.24, s: ball.size });
     if (ball.trail.length > 18) ball.trail.shift();
@@ -2052,6 +2083,13 @@ function drawBatFromSide(wrist, elbow) {
     y: wrist.y + uy * BAT_LENGTH
   };
 
+  lastBatSegment = {
+  ax: wrist.x,
+  ay: wrist.y,
+  bx: batTip.x,
+  by: batTip.y
+};
+  
   ctx.save();
   ctx.strokeStyle = "#4e342e";
   ctx.lineWidth = 24;
