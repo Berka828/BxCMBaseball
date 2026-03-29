@@ -84,11 +84,11 @@ body{background:#000}
   align-items:center;
   justify-content:center;
   padding:12px 14px;
-  background:rgba(8,18,40,.78);
-  border:1px solid var(--line);
+  background:linear-gradient(180deg, rgba(255,212,59,.96), rgba(255,179,0,.94));
+  border:2px solid rgba(255,255,255,.18);
   border-radius:18px;
   pointer-events:auto;
-  box-shadow:0 10px 28px rgba(0,0,0,.18);
+  box-shadow:0 12px 28px rgba(0,0,0,.22);
 }
 
 .brandLogo{
@@ -100,9 +100,9 @@ body{background:#000}
 .compactTitleChip{
   padding:12px 18px;
   border-radius:18px;
-  background:rgba(8,18,40,.76);
-  border:1px solid var(--line);
-  box-shadow:0 10px 28px rgba(0,0,0,.18);
+  background:linear-gradient(180deg, rgba(37,169,255,.96), rgba(0,140,255,.92));
+  border:2px solid rgba(255,255,255,.16);
+  box-shadow:0 12px 28px rgba(0,0,0,.22);
 }
 
 .titleMain{
@@ -117,7 +117,7 @@ body{background:#000}
   margin-top:4px;
   font-size:clamp(12px,1vw,16px);
   font-weight:800;
-  color:var(--muted);
+  color:rgba(255,255,255,.94);
 }
 
 /* moved away from thermometer */
@@ -132,12 +132,12 @@ body{background:#000}
 
 .miniMapCard{
   width:220px;
-  background:rgba(8,18,40,.70);
-  border:1px solid var(--line);
+  background:linear-gradient(180deg, rgba(125,77,255,.96), rgba(95,51,255,.92));
+  border:2px solid rgba(255,255,255,.16);
   border-radius:18px;
   padding:10px;
-  box-shadow:0 12px 28px rgba(0,0,0,.22);
-  opacity:.93;
+  box-shadow:0 12px 28px rgba(0,0,0,.24);
+  opacity:.98;
 }
 
 .miniMapTitle{
@@ -147,7 +147,7 @@ body{background:#000}
   text-transform:uppercase;
   color:rgba(255,255,255,.82);
   margin-bottom:8px;
-}
+}}
 
 #miniMapCanvas{
   display:block;
@@ -175,8 +175,8 @@ body{background:#000}
   min-width:180px;
   border-radius:24px;
   padding:14px 18px 16px;
-  border:2px solid rgba(255,255,255,.08);
-  box-shadow:0 12px 28px rgba(0,0,0,.24);
+  border:3px solid rgba(255,255,255,.18);
+  box-shadow:0 16px 32px rgba(0,0,0,.26);
   text-align:center;
 }
 
@@ -236,12 +236,12 @@ body{background:#000}
   gap:10px;
   padding:14px;
   border-radius:22px;
-  background:rgba(8,18,40,.74);
-  border:1px solid var(--line);
+  background:linear-gradient(180deg, rgba(255,159,26,.96), rgba(255,122,0,.92));
+  border:2px solid rgba(255,255,255,.16);
   pointer-events:auto;
   opacity:1;
   transition:opacity .45s ease, transform .45s ease;
-  box-shadow:0 14px 30px rgba(0,0,0,.20);
+  box-shadow:0 14px 30px rgba(0,0,0,.22);
   z-index:60;
 }
 
@@ -367,13 +367,13 @@ body{background:#000}
 .instructionChip{
   padding:12px 18px;
   border-radius:999px;
-  background:rgba(8,18,40,.82);
-  border:2px solid rgba(255,255,255,.08);
+  background:linear-gradient(180deg, rgba(46,213,115,.96), rgba(20,180,90,.92));
+  border:2px solid rgba(255,255,255,.16);
   font-size:clamp(14px,1.2vw,18px);
   font-weight:900;
-  color:#fff;
+  color:#0f2b18;
   text-align:center;
-  box-shadow:0 12px 28px rgba(0,0,0,.18);
+  box-shadow:0 12px 28px rgba(0,0,0,.20);
 }
 
 /* ================================
