@@ -231,6 +231,15 @@ const HIT_COMMENTS = {
   ]
 };
 
+const ROUND_END_COMMENTS = [
+  "Coach: Great job!",
+  "Coach: Nice work out there!",
+  "Coach: That was a fun round!",
+  "Coach: Great swings today!",
+  "Coach: Way to step up and play!",
+  "Coach: Nice hitting out there!"
+];
+
 const CROWD_REACTIONS = {
   homeRun: ["CROWD ERUPTS!", "WHAT A BLAST!", "THE PLACE GOES WILD!", "HOME RUN ROAR!"],
   bigHit: ["BIG CHEER!", "WHAT A SHOT!", "THE CROWD LOVES IT!", "THAT'S A RIPPER!"],
@@ -963,6 +972,28 @@ function buildRoundSummary() {
   return { title, message, tip, badge };
 }
 
+function getRoundEndVoice(summary) {
+  if (!summary) return randomChoice(ROUND_END_COMMENTS);
+
+  if (summary.title === "Home Run Hero!") {
+    return "Coach: Great job! You were a home run hero this round!";
+  }
+
+  if (summary.title === "Rocket Hitter!") {
+    return "Coach: Great job! You really drove the ball today!";
+  }
+
+  if (summary.title === "Contact Champ!") {
+    return "Coach: Great job! You made lots of strong contact!";
+  }
+
+  if (summary.title === "Nice Swinging!") {
+    return "Coach: Nice work! You put together a strong round!";
+  }
+
+  return "Coach: Great job! Keep practicing and keep swinging!";
+}
+
 function endRoundToSummary() {
   clearPitchTimer();
   clearCountdownTimer();
@@ -972,13 +1003,18 @@ function endRoundToSummary() {
   roundCompleteTimer = Math.round(ROUND_COMPLETE_MS / (1000 / 60));
   gameState = "round_complete";
 
-  summaryTimer = setTimeout(() => {
-    showRoundComplete = false;
-    roundSummary = buildRoundSummary();
-    gameState = "summary";
-    showControlsPanel();
-    coachSay("Coach: Review the round and press reset when you're ready.", 5000, true);
-  }, ROUND_COMPLETE_MS + 2200);
+ summaryTimer = setTimeout(() => {
+  showRoundComplete = false;
+  roundSummary = buildRoundSummary();
+  gameState = "summary";
+  showControlsPanel();
+
+  coachSay(getRoundEndVoice(roundSummary), 3200, true);
+
+  setTimeout(() => {
+    coachSay("Coach: Press reset when you're ready for another round.", 4200, true);
+  }, 1800);
+}, ROUND_COMPLETE_MS + 2200);
 }
 
 function resetRound() {
@@ -2001,6 +2037,9 @@ function drawRoundCompleteOverlay() {
   if (!showRoundComplete) return;
   const alpha = Math.min(1, roundCompleteTimer / 24);
 
+  ctx.fillStyle = "rgba(0,0,0,0.52)";
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.textAlign = "center";
@@ -2048,8 +2087,19 @@ function drawStartOverlay() {
 function drawSummaryOverlay() {
   if (!roundSummary) return;
 
-  ctx.fillStyle = "rgba(0,0,0,0.35)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+ctx.fillStyle = "rgba(8,18,40,0.72)";
+ctx.beginPath();
+ctx.roundRect(canvas.width * 0.18, canvas.height * 0.14, canvas.width * 0.64, canvas.height * 0.74, 28);
+ctx.fill();
+
+ctx.strokeStyle = "rgba(255,255,255,0.14)";
+ctx.lineWidth = 2;
+ctx.stroke();
+ctx.restore();
+  
+  ctx.fillStyle = "rgba(0,0,0,0.62)";
+ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   drawBadge(canvas.width / 2, canvas.height * 0.24, roundSummary.badge);
 
