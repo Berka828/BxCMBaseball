@@ -236,17 +236,22 @@ body{background:#000}
 .statGreen .bottomStatLabel,
 .statGreen .bottomStatValue{color:#0f2b18}
 
-.controlDock button{
-  appearance:none;
-  border:none;
-  border-radius:14px;
-  padding:10px 14px;
-  font-family:"Baloo 2",sans-serif;
-  font-size:18px;
-  font-weight:800;
-  cursor:pointer;
-  transition:transform .15s ease, opacity .15s ease, box-shadow .15s ease;
-  box-shadow:0 4px 12px rgba(0,0,0,.12);
+.controlDock{
+  position:absolute;
+  right:18px;
+  top:18px;
+  left:auto;
+  bottom:auto;
+  width:300px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:12px;
+  border-radius:18px;
+  background:rgba(8,18,40,.74);
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:0 10px 22px rgba(0,0,0,.18);
+  z-index:60;
 }
 
 .controlDock.hiddenDuringPlay{
@@ -256,15 +261,11 @@ body{background:#000}
 }
 
 .controlDock button{
-  appearance:none;
-  border:none;
-  border-radius:16px;
-  padding:12px 16px;
-  font-family:"Baloo 2",sans-serif;
-  font-size:20px;
+  border-radius:14px;
+  padding:10px 14px;
+  font-size:18px;
   font-weight:800;
-  cursor:pointer;
-  transition:transform .15s ease, opacity .15s ease;
+  box-shadow:0 4px 10px rgba(0,0,0,.10);
 }
 
 .controlDock button:hover{transform:translateY(-1px)}
