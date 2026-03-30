@@ -84,11 +84,13 @@ body{background:#000}
   align-items:center;
   justify-content:center;
   padding:12px 14px;
-  background:linear-gradient(180deg, rgba(255,212,59,.96), rgba(255,179,0,.94));
-  border:2px solid rgba(255,255,255,.18);
-  border-radius:18px;
+  background:linear-gradient(180deg, rgba(255,212,59,.96), rgba(255,179,0,.92));
+  border:2px solid rgba(255,255,255,.16);
+  border-radius:22px;
   pointer-events:auto;
-  box-shadow:0 12px 28px rgba(0,0,0,.22);
+  box-shadow:0 14px 30px rgba(0,0,0,.22);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
 }
 
 .brandLogo{
@@ -99,10 +101,12 @@ body{background:#000}
 
 .compactTitleChip{
   padding:12px 18px;
-  border-radius:18px;
-  background:linear-gradient(180deg, rgba(37,169,255,.96), rgba(0,140,255,.92));
+  border-radius:22px;
+  background:linear-gradient(180deg, rgba(37,169,255,.92), rgba(0,140,255,.84));
   border:2px solid rgba(255,255,255,.16);
-  box-shadow:0 12px 28px rgba(0,0,0,.22);
+  box-shadow:0 14px 30px rgba(0,0,0,.22);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
 }
 
 .titleMain{
@@ -111,6 +115,8 @@ body{background:#000}
   letter-spacing:.02em;
   font-size:clamp(22px,2vw,34px);
   line-height:1;
+  color:#ffffff;
+  text-shadow:0 2px 10px rgba(0,0,0,.18);
 }
 
 .titleSub{
@@ -118,6 +124,7 @@ body{background:#000}
   font-size:clamp(12px,1vw,16px);
   font-weight:800;
   color:rgba(255,255,255,.94);
+  text-shadow:0 2px 8px rgba(0,0,0,.16);
 }
 
 /* moved away from thermometer */
@@ -229,22 +236,17 @@ body{background:#000}
 .statGreen .bottomStatLabel,
 .statGreen .bottomStatValue{color:#0f2b18}
 
-.controlDock{
-  right:18px;
-  top:18px;
-  width:min(360px,34vw);
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-  padding:14px;
-  border-radius:22px;
-  background:rgba(8,18,40,.74);
-  border:1px solid var(--line);
-  pointer-events:auto;
-  opacity:1;
-  transition:opacity .45s ease, transform .45s ease;
-  box-shadow:0 14px 30px rgba(0,0,0,.20);
-  z-index:60;
+.controlDock button{
+  appearance:none;
+  border:none;
+  border-radius:18px;
+  padding:12px 16px;
+  font-family:"Baloo 2",sans-serif;
+  font-size:20px;
+  font-weight:800;
+  cursor:pointer;
+  transition:transform .15s ease, opacity .15s ease, box-shadow .15s ease;
+  box-shadow:0 6px 16px rgba(0,0,0,.14);
 }
 
 .controlDock.hiddenDuringPlay{
