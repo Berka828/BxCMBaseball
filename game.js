@@ -2654,10 +2654,14 @@ ctx.translate(-canvas.width / 2, -canvas.height / 2);
       const batTip = drawBatFromSide(battingArm.wrist, battingArm.elbow);
 if (batTip) {
   const stableBatTip = smoothBatPoint(batTip, 0.38);
-  updateBatVelocity(stableBatTip);
-  updateBatTrail(stableBatTip);
-  if (gameState === "playing") tryHit(stableBatTip);
+
+updateBatVelocity(stableBatTip);
+updateBatTrail(stableBatTip);
+
+if (gameState === "playing") {
+  tryHit(stableBatTip);
 }
+  }
   }
 
   drawAccuracyMeter();
