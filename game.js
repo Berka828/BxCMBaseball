@@ -82,6 +82,7 @@ let prevBatPoint = null;
 let smoothedPosePoints = null;
 let batVelocity = { x: 0, y: 0, speed: 0 };
 let lastBatTip = null;
+let smoothedBatTip = null;
 let lastBatSegment = null;
 
 let ball = null;
@@ -1676,6 +1677,20 @@ function drawBall() {
   ctx.restore();
 }
 
+function smoothBatPoint(point, alpha = 0.38) {
+  if (!point) return point;
+
+  if (!smoothedBatTip) {
+    smoothedBatTip = { x: point.x, y: point.y };
+    return smoothedBatTip;
+  }
+
+  smoothedBatTip.x += (point.x - smoothedBatTip.x) * alpha;
+  smoothedBatTip.y += (point.y - smoothedBatTip.y) * alpha;
+
+  return smoothedBatTip;
+}
+
 function updateBatVelocity(point) {
   const now = performance.now();
 
@@ -2637,12 +2652,12 @@ ctx.translate(-canvas.width / 2, -canvas.height / 2);
     const battingArm = getBattingArm(points);
     if (battingArm) {
       const batTip = drawBatFromSide(battingArm.wrist, battingArm.elbow);
-      if (batTip) {
-        updateBatVelocity(batTip);
-        updateBatTrail(batTip);
-        if (gameState === "playing") tryHit(batTip);
-      }
-    }
+if (batTip) {
+  const stableBatTip = smoothBatPoint(batTip, 0.38);
+  updateBatVelocity(stableBatTip);
+  updateBatTrail(stableBatTip);
+  if (gameState === "playing") tryHit(stableBatTip);
+}
   }
 
   drawAccuracyMeter();
@@ -2847,6 +2862,7 @@ turtleFloatPhase = 0;
 bronxIntroShimmer = 0;
 
   smoothedPosePoints = null;
+  smoothedBatTip = null;
   resetRound();
   splashReadyForHands = true;
   gameState = "start";
