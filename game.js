@@ -79,6 +79,7 @@ let bestDistanceFt = 0;
 let currentDistanceFt = 0;
 
 let prevBatPoint = null;
+let smoothedPosePoints = null;
 let batVelocity = { x: 0, y: 0, speed: 0 };
 let lastBatTip = null;
 let lastBatSegment = null;
@@ -442,6 +443,34 @@ function getScaledPosePoints(pose) {
     rightAnkle: getKeypoint(pose, "right_ankle")
   };
   return transformPoseToBattingPosition(rawPoints);
+}
+
+function smoothPosePoints(points, alpha = 0.22) {
+  if (!points) return points;
+
+  if (!smoothedPosePoints) {
+    smoothedPosePoints = JSON.parse(JSON.stringify(points));
+    return smoothedPosePoints;
+  }
+
+  for (const key of Object.keys(points)) {
+    const p = points[key];
+
+    if (!p) {
+      smoothedPosePoints[key] = null;
+      continue;
+    }
+
+    if (!smoothedPosePoints[key]) {
+      smoothedPosePoints[key] = { x: p.x, y: p.y };
+      continue;
+    }
+
+    smoothedPosePoints[key].x += (p.x - smoothedPosePoints[key].x) * alpha;
+    smoothedPosePoints[key].y += (p.y - smoothedPosePoints[key].y) * alpha;
+  }
+
+  return smoothedPosePoints;
 }
 
 function updateCameraZoom() {
@@ -2197,7 +2226,8 @@ function drawCrowdOverlay() {
 }
 
 function drawSilhouetteFigure(pose) {
-  const p = getScaledPosePoints(pose);
+  const raw = getScaledPosePoints(pose);
+  const p = smoothPosePoints(raw, 0.20);
 
   const nose = p.nose;
   const ls = p.leftShoulder;
@@ -2815,7 +2845,8 @@ async function resetGame() {
 turtleEntranceOffset = 180;
 turtleFloatPhase = 0;
 bronxIntroShimmer = 0;
-  
+
+  smoothedPosePoints = null;
   resetRound();
   splashReadyForHands = true;
   gameState = "start";
