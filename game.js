@@ -2664,6 +2664,41 @@ if (gameState === "playing") {
   }
   }
 
+    updateBall();
+updateDistanceDuringFlight();
+
+drawBatTrail();
+drawBall();
+drawSwingPowerMeter();
+drawAccuracyMeter();
+drawPitchIconsRow();
+
+updateAndDrawConfetti();
+updateAndDrawStars();
+updateAndDrawHomerBursts();
+updateAndDrawHomerTrailParticles();
+updateAndDrawFireworks();
+
+drawHitOverlay();
+drawDistanceOverlay();
+drawMissOverlay();
+drawCoachOverlay();
+drawCrowdOverlay();
+drawRoundCompleteOverlay();
+drawBronxGlow();
+drawIntroBronxShimmer();
+drawIntroTurtleMascot();
+
+if (gameState === "paused") drawPauseOverlay();
+if (gameState === "start") drawStartOverlay();
+if (gameState === "summary") drawSummaryOverlay();
+if (gameState === "countdown") drawCountdownOverlay();
+
+ctx.restore();
+
+animationId = requestAnimationFrame(loop);
+}
+  
   drawAccuracyMeter();
   drawSwingPowerMeter();
   drawBatTrail();
