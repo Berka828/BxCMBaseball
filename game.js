@@ -62,6 +62,10 @@ const MODES = {
 
 let difficulty = "medium";
 let detector = null;
+let latestPose = null;
+let poseEstimatePending = false;
+let lastPoseEstimateTime = 0;
+const POSE_INTERVAL_MS = 80;
 let animationId = null;
 let gameState = "start";
 let battingSide = "right";
@@ -2522,8 +2526,8 @@ async function setupCamera() {
   const stream = await navigator.mediaDevices.getUserMedia({
     video: {
       facingMode: "user",
-      width: { ideal: 1280 },
-      height: { ideal: 720 }
+      width: { ideal: 960 },
+      height: { ideal: 540 }
     },
     audio: false
   });
@@ -2636,11 +2640,28 @@ ctx.translate(-canvas.width / 2, -canvas.height / 2);
   drawMiniMap();
   updateIntroDecor();
 
-  let pose = null;
-  if (detector && (gameState === "playing" || gameState === "countdown" || gameState === "start")) {
-    const poses = await detector.estimatePoses(video, { flipHorizontal: true });
-    pose = poses[0] || null;
+  let pose = latestPose;
+
+if (detector && (gameState === "playing" || gameState === "start")) {
+  const now = performance.now();
+
+  if (!poseEstimatePending && now - lastPoseEstimateTime >= POSE_INTERVAL_MS) {
+    poseEstimatePending = true;
+    lastPoseEstimateTime = now;
+
+    detector.estimatePoses(video, { flipHorizontal: true })
+      .then((poses) => {
+        latestPose = poses[0] || null;
+      })
+      .catch(() => {})
+      .finally(() => {
+        poseEstimatePending = false;
+      });
   }
+} else {
+  latestPose = null;
+}
+}
 
   if (pose) {
     const points = drawSilhouetteFigure(pose);
