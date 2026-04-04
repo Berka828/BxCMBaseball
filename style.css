@@ -72,7 +72,6 @@ body {
   pointer-events: none;
 }
 
-/* Splash */
 .splashScreen {
   position: absolute;
   inset: 0;
@@ -127,6 +126,37 @@ body {
   opacity: 0.98;
 }
 
+.cameraPickerWrap {
+  margin: 22px auto 0;
+  width: min(420px, 70vw);
+  text-align: left;
+}
+
+.cameraPickerWrap label,
+.controlGroup label {
+  display: block;
+  font-size: 15px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.cameraSelect {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.10);
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  outline: none;
+}
+
+.cameraSelect option {
+  color: #111;
+}
+
 .splashAction {
   display: flex;
   justify-content: center;
@@ -145,7 +175,6 @@ body {
   opacity: 0.9;
 }
 
-/* Top */
 .topRow {
   position: absolute;
   top: 18px;
@@ -228,7 +257,6 @@ body {
   color: var(--gold);
 }
 
-/* Left stats */
 .leftStats {
   position: absolute;
   top: 118px;
@@ -261,7 +289,6 @@ body {
   margin-top: 2px;
 }
 
-/* Minimap */
 .miniMapWrap {
   left: 18px;
   top: 50%;
@@ -278,7 +305,6 @@ body {
   border-radius: 20px;
 }
 
-/* Instruction */
 .instructionChip {
   left: 50%;
   bottom: 18px;
@@ -291,7 +317,6 @@ body {
   font-weight: 900;
 }
 
-/* Right controls */
 .rightPanel {
   top: 118px;
   right: 18px;
@@ -352,13 +377,6 @@ body {
   margin-top: 14px;
 }
 
-.controlGroup label {
-  display: block;
-  font-size: 15px;
-  font-weight: 900;
-  margin-bottom: 8px;
-}
-
 .sideToggle {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -406,25 +424,4 @@ input[type="range"] {
   line-height: 1.35;
   font-weight: 800;
   opacity: 0.95;
-}
-
-@media (max-width: 1100px) {
-  .topRow {
-    grid-template-columns: 150px 1fr 130px;
-  }
-
-  .leftStats {
-    top: 108px;
-  }
-
-  .rightPanel {
-    width: 250px;
-    top: 108px;
-  }
-
-  .instructionChip {
-    max-width: 70vw;
-    min-width: 0;
-    font-size: 16px;
-  }
 }
