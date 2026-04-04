@@ -1,427 +1,194 @@
-:root {
-  --navy: #0d2344;
-  --navy-2: #17335e;
-  --gold: #ffd54f;
-  --orange: #ff8c5a;
-  --white: #ffffff;
-  --panel: rgba(8, 27, 56, 0.84);
-  --panel-soft: rgba(8, 27, 56, 0.68);
-  --line: rgba(255, 255, 255, 0.14);
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+const appShell = document.getElementById("appShell");
+const splashStartBtn = document.getElementById("splashStartBtn");
+
+const startBtn = document.getElementById("startBtn");
+const pauseBtn = document.getElementById("pauseBtn");
+const resetBtn = document.getElementById("resetBtn");
+const muteBtn = document.getElementById("muteBtn");
+const rightHandBtn = document.getElementById("rightHandBtn");
+const leftHandBtn = document.getElementById("leftHandBtn");
+const instructionChip = document.getElementById("instructionChip");
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+const scoreEl = document.getElementById("scoreEl");
+const pitchesEl = document.getElementById("pitchesEl");
+const hitsEl = document.getElementById("hitsEl");
+const missesEl = document.getElementById("missesEl");
+const veloEl = document.getElementById("veloEl");
+
+const pitchSpeedVal = document.getElementById("pitchSpeedVal");
+const swingThresholdVal = document.getElementById("swingThresholdVal");
+const pitchDelayVal = document.getElementById("pitchDelayVal");
+
+const pitchSpeedSlider = document.getElementById("pitchSpeed");
+const swingThresholdSlider = document.getElementById("swingThreshold");
+const pitchDelaySlider = document.getElementById("pitchDelay");
+
+let started = false;
+let paused = false;
+let soundOn = true;
+let battingSide = "right";
+let cameraStream = null;
+let animationId = null;
+
+function resizeCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width;
+  canvas.height = rect.height;
+}
+window.addEventListener("resize", resizeCanvas);
+
+function updateUI() {
+  scoreEl.textContent = "0";
+  pitchesEl.textContent = "10";
+  hitsEl.textContent = "0";
+  missesEl.textContent = "0";
+  veloEl.textContent = "0";
+
+  pitchSpeedVal.textContent = pitchSpeedSlider.value;
+  swingThresholdVal.textContent = swingThresholdSlider.value;
+  pitchDelayVal.textContent = `${pitchDelaySlider.value}s`;
+
+  rightHandBtn.classList.toggle("active", battingSide === "right");
+  leftHandBtn.classList.toggle("active", battingSide === "left");
+  muteBtn.textContent = soundOn ? "Sound: On" : "Sound: Off";
+  pauseBtn.textContent = paused ? "Resume Game" : "Pause Game";
 }
 
-* {
-  box-sizing: border-box;
+function drawSplashBackground() {
+  resizeCanvas();
+
+  const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  grad.addColorStop(0, "#0d2344");
+  grad.addColorStop(1, "#17335e");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "rgba(255,255,255,0.08)";
+  for (let i = 0; i < 8; i++) {
+    ctx.beginPath();
+    ctx.arc(
+      canvas.width * (0.1 + i * 0.12),
+      canvas.height * 0.18,
+      18,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "rgba(255,255,255,0.10)";
+  ctx.fillRect(canvas.width * 0.18, canvas.height * 0.62, canvas.width * 0.64, canvas.height * 0.10);
 }
 
-html,
-body {
-  margin: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  font-family: "Nunito", system-ui, sans-serif;
-  background: #000;
-  color: var(--white);
+async function startCamera() {
+  if (cameraStream) return;
+
+  cameraStream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: "user",
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    },
+    audio: false
+  });
+
+  video.srcObject = cameraStream;
+  await video.play();
 }
 
-.appShell {
-  position: relative;
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
-  background: #000;
+function drawGamePlaceholder() {
+  resizeCanvas();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ffd54f";
+  ctx.font = '900 72px "Baloo 2", sans-serif';
+  ctx.fillText(paused ? "PAUSED" : "GAME READY", canvas.width / 2, canvas.height * 0.35);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.font = '900 26px "Nunito", sans-serif';
+  ctx.fillText(
+    paused ? "Press Pause again to resume." : "Branded splash restored. Next step is restoring the full simulation loop.",
+    canvas.width / 2,
+    canvas.height * 0.45
+  );
 }
 
-#video {
-  position: absolute;
-  inset: 0;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!started) {
+    drawSplashBackground();
+  } else {
+    drawGamePlaceholder();
+  }
+
+  animationId = requestAnimationFrame(render);
 }
 
-#canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-  background: #000;
+async function beginGame() {
+  try {
+    instructionChip.textContent = "Starting camera...";
+    await startCamera();
+    started = true;
+    paused = false;
+    appShell.classList.remove("preGame");
+    instructionChip.textContent = "Camera started. Branded layout restored.";
+  } catch (err) {
+    console.error(err);
+    instructionChip.textContent = `Camera failed: ${err.message}`;
+  }
+
+  updateUI();
 }
 
-.overlay {
-  position: absolute;
-  z-index: 20;
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  background: var(--panel);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: var(--shadow);
-}
+splashStartBtn.onclick = beginGame;
+startBtn.onclick = beginGame;
 
-.chrome {
-  transition: opacity 0.35s ease, visibility 0.35s ease;
-}
+pauseBtn.onclick = () => {
+  if (!started) return;
+  paused = !paused;
+  instructionChip.textContent = paused ? "Game paused." : "Game resumed.";
+  updateUI();
+};
 
-.preGame .chrome {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-}
+resetBtn.onclick = () => {
+  started = false;
+  paused = false;
+  appShell.classList.add("preGame");
+  instructionChip.textContent = "Press Start to begin.";
+  updateUI();
+};
 
-.splashScreen {
-  position: absolute;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px;
-  background:
-    radial-gradient(circle at top, rgba(255, 213, 79, 0.14), transparent 30%),
-    linear-gradient(180deg, rgba(8,27,56,0.72), rgba(8,27,56,0.86));
-  transition: opacity 0.4s ease, visibility 0.4s ease;
-}
+muteBtn.onclick = () => {
+  soundOn = !soundOn;
+  updateUI();
+};
 
-.appShell:not(.preGame) .splashScreen {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-}
+rightHandBtn.onclick = () => {
+  battingSide = "right";
+  instructionChip.textContent = "Right-handed mode selected.";
+  updateUI();
+};
 
-.splashInner {
-  width: min(860px, 92vw);
-  padding: 34px 30px;
-  border-radius: 30px;
-  border: 1px solid rgba(255,255,255,0.16);
-  background: rgba(8, 27, 56, 0.78);
-  box-shadow: 0 22px 60px rgba(0,0,0,0.36);
-  text-align: center;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
+leftHandBtn.onclick = () => {
+  battingSide = "left";
+  instructionChip.textContent = "Left-handed mode selected.";
+  updateUI();
+};
 
-#splashLogo {
-  display: block;
-  width: min(380px, 60vw);
-  height: auto;
-  margin: 0 auto 18px;
-}
+pitchSpeedSlider.oninput = updateUI;
+swingThresholdSlider.oninput = updateUI;
+pitchDelaySlider.oninput = updateUI;
 
-.splashTitleBlock h1 {
-  margin: 0;
-  font-family: "Baloo 2", sans-serif;
-  font-size: clamp(42px, 5vw, 76px);
-  line-height: 0.95;
-  color: var(--gold);
-}
-
-.splashTitleBlock p {
-  margin: 10px 0 0;
-  font-size: clamp(18px, 2vw, 24px);
-  font-weight: 800;
-  opacity: 0.98;
-}
-
-.cameraPickerWrap {
-  margin: 22px auto 0;
-  width: min(420px, 70vw);
-  text-align: left;
-}
-
-.cameraPickerWrap label,
-.controlGroup label {
-  display: block;
-  font-size: 15px;
-  font-weight: 900;
-  margin-bottom: 8px;
-}
-
-.cameraSelect {
-  width: 100%;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.10);
-  color: #fff;
-  font-family: inherit;
-  font-size: 15px;
-  font-weight: 800;
-  outline: none;
-}
-
-.cameraSelect option {
-  color: #111;
-}
-
-.splashAction {
-  display: flex;
-  justify-content: center;
-  margin-top: 24px;
-}
-
-.splashAction .ctaBtn {
-  width: min(320px, 70vw);
-  margin: 0;
-}
-
-.splashSubtext {
-  margin-top: 14px;
-  font-size: 15px;
-  font-weight: 800;
-  opacity: 0.9;
-}
-
-.topRow {
-  position: absolute;
-  top: 18px;
-  left: 18px;
-  right: 18px;
-  display: grid;
-  grid-template-columns: 190px 1fr 155px;
-  gap: 12px;
-  z-index: 20;
-}
-
-.logoPanel,
-.titlePanel,
-.scorePanel {
-  position: relative;
-  min-height: 82px;
-}
-
-.logoPanel {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 14px;
-}
-
-#bxcmLogo {
-  width: 100%;
-  max-width: 160px;
-  height: auto;
-  display: block;
-  object-fit: contain;
-}
-
-.titlePanel {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-  padding: 10px 16px;
-}
-
-.titlePanel h1 {
-  margin: 0;
-  font-family: "Baloo 2", sans-serif;
-  font-size: clamp(30px, 3vw, 52px);
-  line-height: 0.95;
-  color: var(--gold);
-}
-
-.titlePanel p {
-  margin: 4px 0 0;
-  font-size: clamp(13px, 1.05vw, 18px);
-  font-weight: 800;
-  opacity: 0.96;
-}
-
-.scorePanel {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 18px;
-}
-
-.scoreStat {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-}
-
-.scoreStat span {
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.scoreStat strong {
-  font-size: 20px;
-  font-weight: 900;
-  color: var(--gold);
-}
-
-.leftStats {
-  position: absolute;
-  top: 118px;
-  left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  z-index: 20;
-}
-
-.statBox {
-  position: relative;
-  width: 122px;
-  min-height: 92px;
-  padding: 12px 10px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-}
-
-.statBox span {
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.statBox strong {
-  font-size: 26px;
-  font-weight: 900;
-  margin-top: 2px;
-}
-
-.miniMapWrap {
-  left: 18px;
-  top: 50%;
-  transform: translateY(-10%);
-  width: 222px;
-  padding: 0;
-  overflow: hidden;
-}
-
-#miniMapCanvas {
-  display: block;
-  width: 220px;
-  height: 130px;
-  border-radius: 20px;
-}
-
-.instructionChip {
-  left: 50%;
-  bottom: 18px;
-  transform: translateX(-50%);
-  min-width: 420px;
-  max-width: min(760px, 80vw);
-  padding: 14px 22px;
-  text-align: center;
-  font-size: 18px;
-  font-weight: 900;
-}
-
-.rightPanel {
-  top: 118px;
-  right: 18px;
-  width: 280px;
-  padding: 16px 16px 18px;
-  transition: opacity 0.7s ease;
-}
-
-.rightPanel h2 {
-  margin: 0 0 12px;
-  font-family: "Baloo 2", sans-serif;
-  font-size: 26px;
-  line-height: 1;
-  color: var(--gold);
-}
-
-.ctaBtn,
-.toggleBtn {
-  appearance: none;
-  border: 0;
-  outline: 0;
-  border-radius: 18px;
-  font-family: inherit;
-  font-weight: 900;
-  cursor: pointer;
-  transition: transform 0.12s ease, opacity 0.2s ease, background 0.2s ease;
-}
-
-.ctaBtn:hover,
-.toggleBtn:hover {
-  transform: translateY(-1px);
-}
-
-.ctaBtn {
-  display: block;
-  width: 100%;
-  padding: 14px 16px;
-  margin-bottom: 10px;
-  font-size: 18px;
-}
-
-.primaryBtn {
-  background: linear-gradient(180deg, #ff9f73, var(--orange));
-  color: #fff;
-}
-
-.secondaryBtn {
-  background: linear-gradient(180deg, #657d9f, #4c6281);
-  color: #fff;
-}
-
-.soundBtn {
-  background: linear-gradient(180deg, #59b3ff, #3c8ee1);
-  color: #fff;
-}
-
-.controlGroup {
-  margin-top: 14px;
-}
-
-.sideToggle {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.toggleBtn {
-  padding: 13px 10px;
-  font-size: 17px;
-  background: linear-gradient(180deg, #657d9f, #4c6281);
-  color: #fff;
-}
-
-.toggleBtn.active {
-  background: linear-gradient(180deg, #ffd95f, #ffc332);
-  color: #11284a;
-}
-
-.sliderHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.sliderHeader label {
-  margin: 0;
-}
-
-.sliderHeader span {
-  font-weight: 900;
-  color: #dfeaff;
-}
-
-input[type="range"] {
-  width: 100%;
-  accent-color: #4ea7ff;
-  cursor: pointer;
-}
-
-.helpText {
-  margin-top: 14px;
-  font-size: 13px;
-  line-height: 1.35;
-  font-weight: 800;
-  opacity: 0.95;
-}
+resizeCanvas();
+updateUI();
+instructionChip.textContent = "Press Start to begin.";
+appShell.classList.add("preGame");
+render();
