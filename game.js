@@ -2126,10 +2126,23 @@ function drawSilhouetteFigure(pose) {
 function getBattingArm(points) {
   if (!points) return null;
 
+  // Because estimatePoses() is already using flipHorizontal: true,
+  // the displayed avatar is mirrored like a mirror.
+  // So we intentionally swap which tracked arm drives the bat.
   if (battingSide === "right") {
-    if (points.rightWrist && points.rightElbow) return { wrist: points.rightWrist, elbow: points.rightElbow };
+    if (points.leftWrist && points.leftElbow) {
+      return { wrist: points.leftWrist, elbow: points.leftElbow };
+    }
+    if (points.rightWrist && points.rightElbow) {
+      return { wrist: points.rightWrist, elbow: points.rightElbow };
+    }
   } else {
-    if (points.leftWrist && points.leftElbow) return { wrist: points.leftWrist, elbow: points.leftElbow };
+    if (points.rightWrist && points.rightElbow) {
+      return { wrist: points.rightWrist, elbow: points.rightElbow };
+    }
+    if (points.leftWrist && points.leftElbow) {
+      return { wrist: points.leftWrist, elbow: points.leftElbow };
+    }
   }
 
   return null;
