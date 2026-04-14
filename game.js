@@ -152,12 +152,12 @@ let CONTACT_DISTANCE = DIFFICULTIES[difficulty].contactDistance;
 const BAT_LENGTH = 150;
 
 const PLAYER_SCALE = 0.34;
-const PLAYER_TARGET_X = 0.72;
+const PLAYER_TARGET_X = 0.15;
 const PLAYER_FLOOR_Y = 0.89;
 const BALL_LANE_Y = 0.66;
 
-const BALL_SPAWN_X_RATIO = 0.06;
-const BALL_MISS_X_RATIO = 0.94;
+const BALL_SPAWN_X_RATIO = 0.965;
+const BALL_MISS_X_RATIO = 0.12;
 const BG_ZOOM = 0.86;
 
 const HIT_FEEDBACK_MS = 3800;
@@ -1081,7 +1081,7 @@ function createPitch() {
   ball = {
     x: canvas.width * BALL_SPAWN_X_RATIO,
     y: canvas.height * BALL_LANE_Y + (Math.random() - 0.5) * canvas.height * 0.024,
-    vx: sliderPitchSpeed + Math.random() * 0.45,
+    vx: -sliderPitchSpeed - Math.random() * 0.45,
     vy: (Math.random() - 0.5) * 0.08,
     size: BALL_RADIUS * scale * 1.12,
     hit: false,
