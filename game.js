@@ -331,13 +331,7 @@ function transformPoseToBattingPosition(rawPoints) {
 
   const scaled = {};
   for (const [key, value] of Object.entries(rawPoints)) {
-    // 1. Scale the points first
-    // 2. Mirror the X coordinate: (bounds.maxX - value.x) + bounds.minX
-    // This flips the character horizontally within its own bounding box
-    scaled[key] = value ? { 
-      x: ((bounds.maxX - value.x) + bounds.minX) * scale, 
-      y: value.y * scale 
-    } : null;
+    scaled[key] = value ? { x: value.x * scale, y: value.y * scale } : null;
   }
 
   const scaledBounds = getPoseBounds(scaled);
