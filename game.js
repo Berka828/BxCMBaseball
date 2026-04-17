@@ -331,14 +331,22 @@ function transformPoseToBattingPosition(rawPoints) {
 
   const scaled = {};
   for (const [key, value] of Object.entries(rawPoints)) {
-    scaled[key] = value ? { x: value.x * scale, y: value.y * scale } : null;
+    // Keep the mirror fix from the previous step
+    scaled[key] = value ? { 
+      x: ((bounds.maxX - value.x) + bounds.minX) * scale, 
+      y: value.y * scale 
+    } : null;
   }
 
   const scaledBounds = getPoseBounds(scaled);
   const targetFootY = canvas.height * PLAYER_FLOOR_Y;
-  const targetLeftX = canvas.width * PLAYER_TARGET_X;
+  
+  // SWAP PLAYER SIDE:
+  // Righty stands on the LEFT side of screen (ball comes from right).
+  // Lefty stands on the RIGHT side of screen (ball comes from left).
+  const targetX = (battingSide === "right") ? canvas.width * 0.15 : canvas.width * 0.75;
 
-  const offsetX = targetLeftX - scaledBounds.minX;
+  const offsetX = targetX - scaledBounds.minX;
   const offsetY = targetFootY - scaledBounds.maxY;
 
   for (const key of Object.keys(scaled)) {
@@ -1078,10 +1086,18 @@ function createPitch() {
   const scale = DIFFICULTIES[difficulty].ballScale;
   const sliderPitchSpeed = parseFloat(pitchSpeedSlider?.value || String(DIFFICULTIES[difficulty].pitchSpeed));
 
+  // Determine direction based on batting side
+  const isRightHanded = (battingSide === "right");
+  
+  // If Righty, spawn on RIGHT side and move LEFT. 
+  // If Lefty, spawn on LEFT side and move RIGHT.
+  const spawnX = isRightHanded ? canvas.width * 0.965 : canvas.width * 0.035;
+  const velocityX = isRightHanded ? -sliderPitchSpeed : sliderPitchSpeed;
+
   ball = {
-    x: canvas.width * BALL_SPAWN_X_RATIO,
+    x: spawnX,
     y: canvas.height * BALL_LANE_Y + (Math.random() - 0.5) * canvas.height * 0.024,
-    vx: -sliderPitchSpeed - Math.random() * 0.45,
+    vx: velocityX + (isRightHanded ? -Math.random() * 0.45 : Math.random() * 0.45),
     vy: (Math.random() - 0.5) * 0.08,
     size: BALL_RADIUS * scale * 1.12,
     hit: false,
@@ -1206,7 +1222,9 @@ cameraZoomFrames = 22;
 
 function tryHit(batTip) {
   if (!ball || !ball.active || ball.hit) return;
-  if (ball.x < canvas.width * 0.22) return;
+  // Ensure the ball has actually reached the batter's half of the screen
+if (battingSide === "right" && ball.x > canvas.width * 0.45) return;
+if (battingSide === "left" && ball.x < canvas.width * 0.55) return;
 
   const tipDistance = Math.hypot(ball.x - batTip.x, ball.y - batTip.y);
 const segmentDistance = lastBatSegment
