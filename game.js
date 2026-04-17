@@ -1222,9 +1222,13 @@ cameraZoomFrames = 22;
 
 function tryHit(batTip) {
   if (!ball || !ball.active || ball.hit) return;
-  // Ensure the ball has actually reached the batter's half of the screen
-if (battingSide === "right" && ball.x > canvas.width * 0.45) return;
-if (battingSide === "left" && ball.x < canvas.width * 0.55) return;
+
+  // Ensure the ball has actually reached the batter's side
+  const isRighty = (battingSide === "right");
+  if (isRighty && ball.x > canvas.width * 0.40) return; 
+  if (!isRighty && ball.x < canvas.width * 0.60) return;
+
+  // ... rest of your distance checking code
 
   const tipDistance = Math.hypot(ball.x - batTip.x, ball.y - batTip.y);
 const segmentDistance = lastBatSegment
@@ -1403,22 +1407,38 @@ function spawnHomeRunTrail() {
   });
 }
 
-function updateBall() {
+// Inside function function updateBall() {
   if (!ball || !ball.active || gameState !== "playing") return;
 
   if (!ball.hit) {
+    // MOVE THE BALL
     ball.x += ball.vx;
     ball.y += ball.vy;
+
+    // CREATE TRAIL
     ball.trail.push({ x: ball.x, y: ball.y, a: 0.16, s: ball.size });
     if (ball.trail.length > 9) ball.trail.shift();
 
-    if (ball.x < canvas.width * BALL_MISS_X_RATIO) resolveMiss();
+    // --- FIXED MISS LOGIC ---
+    // If Righty, ball moves Left. Miss if X < 12% of screen.
+    // If Lefty, ball moves Right. Miss if X > 88% of screen.
+    const isRighty = (battingSide === "right");
+    const outOfBounds = isRighty 
+        ? ball.x < canvas.width * BALL_MISS_X_RATIO 
+        : ball.x > canvas.width * (1 - BALL_MISS_X_RATIO);
+
+    if (outOfBounds) {
+      resolveMiss();
+    }
+    // ------------------------
+
   } else {
-   ball.vy += GRAVITY * (ball.gravityScale || 1);
-ball.vx *= (ball.airDragX || 0.992);
-ball.vy *= (ball.airDragY || 0.996);
-ball.x += ball.vx;
-ball.y += ball.vy;
+    // BALL WAS HIT (Physics for flying through the air)
+    ball.vy += GRAVITY * (ball.gravityScale || 1);
+    ball.vx *= (ball.airDragX || 0.992);
+    ball.vy *= (ball.airDragY || 0.996);
+    ball.x += ball.vx;
+    ball.y += ball.vy;
 
     ball.trail.push({ x: ball.x, y: ball.y, a: 0.24, s: ball.size });
     if (ball.trail.length > 18) ball.trail.shift();
@@ -1428,6 +1448,7 @@ ball.y += ball.vy;
       spawnHomeRunTrail();
     }
 
+    // REMOVE BALL IF IT FLIES OFF SCREEN
     if (ball.y > canvas.height + 60 || ball.x < -90 || ball.x > canvas.width + 90) {
       resolveFinishedHit();
     }
@@ -2279,14 +2300,19 @@ async function loadModel() {
 function drawMiniMap() {
   if (!miniMapCanvas || !miniCtx) return;
 
+  const isRighty = (battingSide === "right");
+
+  // 1. Clear and Draw Background
   miniCtx.clearRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
   miniCtx.fillStyle = "#0b2343";
   miniCtx.fillRect(0, 0, miniMapCanvas.width, miniMapCanvas.height);
 
+  // Border
   miniCtx.strokeStyle = "rgba(255,255,255,0.18)";
   miniCtx.lineWidth = 2;
   miniCtx.strokeRect(1, 1, miniMapCanvas.width - 2, miniMapCanvas.height - 2);
 
+  // 2. Draw the Ball Lane (The "Field")
   miniCtx.fillStyle = "rgba(255,255,255,0.06)";
   miniCtx.fillRect(14, 50, miniMapCanvas.width - 28, 30);
 
@@ -2297,31 +2323,49 @@ function drawMiniMap() {
   miniCtx.lineTo(20, 65);
   miniCtx.stroke();
 
-  miniCtx.fillStyle = "#ffd54f";
-  miniCtx.beginPath();
-  miniCtx.arc(miniMapCanvas.width - 16, 65, 7, 0, Math.PI * 2);
-  miniCtx.fill();
-
-  miniCtx.fillStyle = "#25a9ff";
-  miniCtx.beginPath();
-  miniCtx.arc(28, 65, 7, 0, Math.PI * 2);
-  miniCtx.fill();
-
-  if (ball) {
-    const bx = clamp((ball.x / canvas.width) * miniMapCanvas.width, 10, miniMapCanvas.width - 10);
-    const by = clamp((ball.y / canvas.height) * miniMapCanvas.height, 18, miniMapCanvas.height - 18);
-
-    miniCtx.fillStyle = "#ffffff";
-    miniCtx.beginPath();
-    miniCtx.arc(bx, by, 7, 0, Math.PI * 2);
-    miniCtx.fill();
-  }
-
+  // 3. Setup Labels
   miniCtx.fillStyle = "#dbeaff";
   miniCtx.font = '900 12px "Nunito", sans-serif';
-  miniCtx.textAlign = "left";
-  miniCtx.fillText("Pitcher", miniMapCanvas.width - 58, 18);
-  miniCtx.fillText("Batter", 12, 18);
+  miniCtx.textAlign = "center";
+
+  // Position Labels based on side
+  const batterLabelX = isRighty ? 35 : miniMapCanvas.width - 35;
+  const pitcherLabelX = isRighty ? miniMapCanvas.width - 35 : 35;
+
+  miniCtx.fillText("Batter", batterLabelX, 18);
+  miniCtx.fillText("Pitcher", pitcherLabelX, 18);
+
+  // 4. Draw Stationary Icons (Batter and Pitcher dots)
+  // Pitcher Dot (Yellow)
+  miniCtx.fillStyle = "#ffd54f";
+  miniCtx.beginPath();
+  miniCtx.arc(pitcherLabelX, 65, 7, 0, Math.PI * 2);
+  miniCtx.fill();
+
+  // Batter Dot (Blue)
+  miniCtx.fillStyle = "#25a9ff";
+  miniCtx.beginPath();
+  miniCtx.arc(batterLabelX, 65, 7, 0, Math.PI * 2);
+  miniCtx.fill();
+
+  // 5. Draw the Moving Ball
+  if (ball) {
+    // We scale the ball's X position to the map width
+    const bx = (ball.x / canvas.width) * miniMapCanvas.width;
+    const by = (ball.y / canvas.height) * miniMapCanvas.height;
+    
+    // Clamp it so it doesn't fly off the card visually
+    const clampedX = Math.max(10, Math.min(bx, miniMapCanvas.width - 10));
+    const clampedY = Math.max(18, Math.min(by, miniMapCanvas.height - 18));
+
+    miniCtx.fillStyle = "#ffffff";
+    miniCtx.shadowBlur = 8;
+    miniCtx.shadowColor = "#ffffff";
+    miniCtx.beginPath();
+    miniCtx.arc(clampedX, clampedY, 7, 0, Math.PI * 2);
+    miniCtx.fill();
+    miniCtx.shadowBlur = 0; // Reset shadow for next draw
+  }
 }
 
 function drawBronxGlow() {
