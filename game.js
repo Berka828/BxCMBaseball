@@ -332,7 +332,7 @@ function transformPoseToBattingPosition(rawPoints) {
   const scaled = {};
   for (const [key, value] of Object.entries(rawPoints)) {
     if (value) {
-      // MIRROR LOGIC: Flip the X coordinate within the person's bounding box
+      // MIRROR FIX: Flips your physical movement to match the screen
       const mirroredX = bounds.maxX - (value.x - bounds.minX);
       scaled[key] = { x: mirroredX * scale, y: value.y * scale };
     } else {
@@ -343,9 +343,9 @@ function transformPoseToBattingPosition(rawPoints) {
   const scaledBounds = getPoseBounds(scaled);
   const targetFootY = canvas.height * PLAYER_FLOOR_Y;
   
-  // Dynamic Positioning: Put the player on the side OPPOSITE the pitcher
-  // Righty stands on the Left side, Lefty stands on the Right side
-  const targetXRatio = (battingSide === "right") ? 0.15 : 0.75;
+  // THE FIX: If Righty, stand on the RIGHT side (0.75) so ball can come from LEFT (0.03)
+  // If Lefty, stand on the LEFT side (0.15) so ball can come from RIGHT (0.97)
+  const targetXRatio = (battingSide === "right") ? 0.75 : 0.15;
   const targetLeftX = canvas.width * targetXRatio;
 
   const offsetX = targetLeftX - scaledBounds.minX;
@@ -1088,8 +1088,8 @@ function createPitch() {
   const scale = DIFFICULTIES[difficulty].ballScale;
   const sliderPitchSpeed = parseFloat(pitchSpeedSlider?.value || String(DIFFICULTIES[difficulty].pitchSpeed));
 
-  // If Righty: Spawn Left (0.03), Move Right (Positive VX)
-  // If Lefty: Spawn Right (0.97), Move Left (Negative VX)
+  // IF RIGHTY: Player is at 0.75, so Ball spawns at LEFT (0.035) and moves RIGHT (+)
+  // IF LEFTY: Player is at 0.15, so Ball spawns at RIGHT (0.965) and moves LEFT (-)
   const isRighty = (battingSide === "right");
   const spawnX = isRighty ? 0.035 : 0.965;
   const directionMultiplier = isRighty ? 1 : -1;
