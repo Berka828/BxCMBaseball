@@ -322,6 +322,7 @@ function getPoseBounds(rawPoints) {
   return { minX, maxX, minY, maxY, width: maxX - minX, height: maxY - minY };
 }
 
+// Inside game.js -> transformPoseToBattingPosition
 function transformPoseToBattingPosition(rawPoints) {
   const bounds = getPoseBounds(rawPoints);
   if (!bounds) return rawPoints;
@@ -332,7 +333,7 @@ function transformPoseToBattingPosition(rawPoints) {
   const scaled = {};
   for (const [key, value] of Object.entries(rawPoints)) {
     if (value) {
-      // MIRROR FIX: Flips your physical movement to match the screen
+      // MIRROR FIX: Keep the physical mirroring
       const mirroredX = bounds.maxX - (value.x - bounds.minX);
       scaled[key] = { x: mirroredX * scale, y: value.y * scale };
     } else {
@@ -343,10 +344,8 @@ function transformPoseToBattingPosition(rawPoints) {
   const scaledBounds = getPoseBounds(scaled);
   const targetFootY = canvas.height * PLAYER_FLOOR_Y;
   
-  // THE FIX: If Righty, stand on the RIGHT side (0.75) so ball can come from LEFT (0.03)
-  // If Lefty, stand on the LEFT side (0.15) so ball can come from RIGHT (0.97)
-  const targetXRatio = (battingSide === "right") ? 0.75 : 0.15;
-  const targetLeftX = canvas.width * targetXRatio;
+  // CENTER LOGIC: Always anchor the player in the middle (0.5)
+  const targetLeftX = (canvas.width * 0.5) - (scaledBounds.width / 2);
 
   const offsetX = targetLeftX - scaledBounds.minX;
   const offsetY = targetFootY - scaledBounds.maxY;
@@ -1084,32 +1083,22 @@ function classifyHit(power, upwardSwing) {
 function createPitch() {
   if (pitchesLeft <= 0 || gameState !== "playing" || ball) return;
 
-  CONTACT_DISTANCE = DIFFICULTIES[difficulty].contactDistance;
-  const scale = DIFFICULTIES[difficulty].ballScale;
-  const sliderPitchSpeed = parseFloat(pitchSpeedSlider?.value || String(DIFFICULTIES[difficulty].pitchSpeed));
-
-  // IF RIGHTY: Player is at 0.75, so Ball spawns at LEFT (0.035) and moves RIGHT (+)
-  // IF LEFTY: Player is at 0.15, so Ball spawns at RIGHT (0.965) and moves LEFT (-)
-  const isRighty = (battingSide === "right");
-  const spawnX = isRighty ? 0.035 : 0.965;
-  const directionMultiplier = isRighty ? 1 : -1;
+  const sliderPitchSpeed = parseFloat(pitchSpeedSlider?.value || "8.5");
 
   ball = {
-    x: canvas.width * spawnX,
-    y: canvas.height * BALL_LANE_Y + (Math.random() - 0.5) * canvas.height * 0.024,
-    vx: (sliderPitchSpeed + Math.random() * 0.45) * directionMultiplier,
-    vy: (Math.random() - 0.5) * 0.08,
-    size: BALL_RADIUS * scale * 1.12,
+    // Starts at the "Pitcher's Mound" (Center, further up the screen)
+    x: canvas.width * 0.5,
+    y: canvas.height * 0.45, 
+    z: 0, // Depth tracker (0 = back, 1 = front/impact)
+    vz: sliderPitchSpeed * 0.002, // Speed of movement toward foreground
+    size: 2, // Start tiny
+    maxSize: BALL_RADIUS * 2.5, // Target size at impact
     hit: false,
     active: true,
-    trail: [],
-    result: "",
-    estimatedDistanceFt: 0,
-    contactX: 0
+    trail: []
   };
 
   playPitchSound();
-  coachSay("Coach: Track it all the way in.", 2200, false);
 }
 
 function scheduleNextPitch(extraDelayMs = 0) {
@@ -1221,58 +1210,84 @@ cameraZoomFrames = 22;
 }
 
 function tryHit(batTip) {
+  // 1. EXIT CHECKS: Don't process if no ball exists, it's already hit, or it's inactive
   if (!ball || !ball.active || ball.hit) return;
-  if (ball.x < canvas.width * 0.22) return;
 
+  // 2. DEPTH (Z) VALIDATION: 
+  // In the new perspective, the ball must be at the "Plate" (Z = 1.0).
+  // We allow a small window (0.85 to 1.1) to account for human reaction time.
+  if (ball.z < 0.85 || ball.z > 1.1) return;
+
+  // 3. PHYSICAL CONTACT CHECK:
+  // We check the distance between the bat tip and the ball's center.
   const tipDistance = Math.hypot(ball.x - batTip.x, ball.y - batTip.y);
-const segmentDistance = lastBatSegment
-  ? pointToSegmentDistance(
-      ball.x,
-      ball.y,
-      lastBatSegment.ax,
-      lastBatSegment.ay,
-      lastBatSegment.bx,
-      lastBatSegment.by
-    )
-  : tipDistance;
 
-const modeContactDistance = CONTACT_DISTANCE * MODES[arcadeMode].contactBoost;
-if (Math.min(tipDistance, segmentDistance) > modeContactDistance) return;
+  // We check the distance between the ball and the entire bat segment (handle to tip).
+  const segmentDistance = lastBatSegment
+    ? pointToSegmentDistance(
+        ball.x,
+        ball.y,
+        lastBatSegment.ax,
+        lastBatSegment.ay,
+        lastBatSegment.bx,
+        lastBatSegment.by
+      )
+    : tipDistance;
+
+  // We boost the contact zone slightly for the 3D view to make it more forgiving for kids.
+  const modeContactDistance = CONTACT_DISTANCE * 1.4 * MODES[arcadeMode].contactBoost;
+
+  // If the bat isn't close enough to the ball, it's a miss.
+  if (Math.min(tipDistance, segmentDistance) > modeContactDistance) return;
   
+  // 4. THE HIT IS SUCCESSFUL:
   ball.hit = true;
 
-  const timing = getTimingFeedback(batTip, ball);
-let power = clamp((batVelocity.speed / 700) * MODES[arcadeMode].powerBoost, 0.35, 2.25);
+  // Determine timing feedback based on the Depth (Z) instead of X.
+  // Perfect is right at Z = 1.0. Lower than 1.0 is Early, higher is Late.
+  let timing;
+  const zDiff = ball.z - 1.0;
+  if (Math.abs(zDiff) <= 0.05) {
+    lastTimingOffset = 0.50;
+    lastTimingRating = "PERFECT!";
+    accuracyMarkerTimer = Math.round(2200 / (1000 / 60));
+    timing = { label: "PERFECT!", powerBonus: 1.14, direction: 1.0 };
+  } else if (zDiff < -0.05) {
+    lastTimingOffset = 0.22;
+    lastTimingRating = "TOO EARLY";
+    accuracyMarkerTimer = Math.round(2200 / (1000 / 60));
+    timing = { label: "TOO EARLY", powerBonus: 0.86, direction: 0.92 };
+  } else {
+    lastTimingOffset = 0.80;
+    lastTimingRating = "TOO LATE";
+    accuracyMarkerTimer = Math.round(2200 / (1000 / 60));
+    timing = { label: "TOO LATE", powerBonus: 0.84, direction: 1.05 };
+  }
+
+  // Calculate power based on bat speed and arcade mode boosts.
+  let power = clamp((batVelocity.speed / 700) * MODES[arcadeMode].powerBoost, 0.35, 2.25);
   power *= timing.powerBonus;
 
+  // Determine the hit type (Home Run, Single, etc.)
   const upwardSwing = clamp((-batVelocity.y) / 700, -0.4, 1.0);
-  const lateral = batVelocity.x >= 0 ? 1 : -1;
   const result = classifyHit(power, upwardSwing);
 
-  const baseVX = 9 + power * 8;
-  const baseVY = -(4 + Math.max(0, upwardSwing) * 7 + power * 2.2);
-
-  ball.vx = lateral * baseVX * result.launchBoost * timing.direction + (Math.random() - 0.5) * 1.0;
-ball.vy = baseVY * result.launchBoost + (Math.random() - 0.5) * 0.8;
-
-ball.gravityScale = clamp(
-  (0.86 - upwardSwing * 0.18 - power * 0.05) * MODES[arcadeMode].gravityBoost,
-  0.55,
-  0.92
-);
-  
-ball.airDragX = clamp(0.996 - power * 0.0005, 0.991, 0.996);
-ball.airDragY = 0.997;
+  // Set the "Exit Velocity" and "Launch Angle"
+  // The ball now moves "Away" from the screen (Z decreases)
+  ball.vx = (batVelocity.x / 50) * timing.direction; // Ball follows bat's horizontal direction
+  ball.vy = -(5 + Math.max(0, upwardSwing) * 8 + power * 2);
+  ball.vz = -0.04 - (power * 0.02); // Moves away into the background
 
   ball.result = result.label;
-  ball.contactX = ball.x;
   ball.estimatedDistanceFt = estimateDistanceFt(power, result.label);
   currentDistanceFt = 0;
 
+  // 5. UPDATE STATS & HUD
   score += result.points;
   hits++;
   pitchesLeft--;
 
+  // Handle Home Run celebrations or standard hit feedback
   if (result.label === "HOME RUN!") {
     hitText = getFunHitText(result.label, ball.estimatedDistanceFt);
     hitTextTimer = Math.round((HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
@@ -1282,15 +1297,11 @@ ball.airDragY = 0.997;
     distanceTextTimer = Math.round((HOME_RUN_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
     coachSay(getHitCommentary(result.label, timing.label, ball.estimatedDistanceFt), 3200, true);
     updateCrowdMood("home_run");
-  } else if (result.label === "TRIPLE!" || result.label === "DOUBLE!") {
-    hitText = getFunHitText(result.label, ball.estimatedDistanceFt);
-    hitTextTimer = Math.round((BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
-    timingText = timing.label;
-    timingTextTimer = Math.round((BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
-    distanceText = `${ball.estimatedDistanceFt} FT`;
-    distanceTextTimer = Math.round((BIG_HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
-    coachSay(getHitCommentary(result.label, timing.label, ball.estimatedDistanceFt), 2800, true);
-    updateCrowdMood("big_hit");
+    homeRuns++;
+    bronxGlowTimer = 90; 
+    playHomeRunSound();
+    playHomeRunMusicBurst();
+    triggerHomeRunCelebration(ball.x, ball.y);
   } else {
     hitText = getFunHitText(result.label, ball.estimatedDistanceFt);
     hitTextTimer = Math.round((HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
@@ -1299,26 +1310,12 @@ ball.airDragY = 0.997;
     distanceText = `${ball.estimatedDistanceFt} FT`;
     distanceTextTimer = Math.round((HIT_FEEDBACK_MS + FEEDBACK_FADE_MS) / (1000 / 60));
     coachSay(getHitCommentary(result.label, timing.label, ball.estimatedDistanceFt), 2400, true);
+    playHitSound();
   }
 
+  // 6. VISUAL EFFECTS
   spawnConfetti(ball.x, ball.y, result.confettiCount);
   spawnStars(ball.x, ball.y, result.label);
-
-  if (result.label === "HOME RUN!") {
-    homeRuns++;
-    bronxGlowTimer = 90; 
-    playHomeRunSound();
-    playHomeRunMusicBurst();
-    triggerHomeRunCelebration(ball.x, ball.y);
-    if (instructionChip) instructionChip.textContent = "HOME RUN! That one flew a long way!";
-  } else if (result.label === "TRIPLE!" || result.label === "DOUBLE!") {
-    playBigHitSound();
-    if (instructionChip) instructionChip.textContent = "Big hit! Watch how far it goes!";
-  } else {
-    playHitSound();
-    if (instructionChip) instructionChip.textContent = "Nice contact!";
-  }
-
   bestDistanceFt = Math.max(bestDistanceFt, ball.estimatedDistanceFt);
   updateHud();
 }
@@ -1405,36 +1402,24 @@ function updateBall() {
   if (!ball || !ball.active || gameState !== "playing") return;
 
   if (!ball.hit) {
-    ball.x += ball.vx;
-    ball.y += ball.vy;
-    ball.trail.push({ x: ball.x, y: ball.y, a: 0.16, s: ball.size });
-    if (ball.trail.length > 9) ball.trail.shift();
+    // Ball moves from background (z=0) to foreground (z=1)
+    ball.z += ball.vz;
+    
+    // Scale size based on depth
+    ball.size = 4 + (ball.maxSize * ball.z);
+    
+    // Slight vertical drop as it reaches the plate
+    ball.y += ball.z * 1.5;
 
-    // Check if ball passed the batter based on direction
-    const pastBatter = (ball.vx > 0) 
-      ? (ball.x > canvas.width * 0.88)  // If moving Right, miss at right edge
-      : (ball.x < canvas.width * 0.12); // If moving Left, miss at left edge
-
-    if (pastBatter) resolveMiss();
+    // Ball passes the batter (Miss)
+    if (ball.z > 1.15) resolveMiss();
   } else {
-    // ... rest of the function (the "ball was hit" logic) remains the same
-    ball.vy += GRAVITY * (ball.gravityScale || 1);
-    ball.vx *= (ball.airDragX || 0.992);
-    ball.vy *= (ball.airDragY || 0.996);
-    ball.x += ball.vx;
-    ball.y += ball.vy;
+    // If hit, ball flies back into the distance
+    ball.z -= 0.04;
+    ball.size *= 0.96;
+    ball.y -= 8; // Arc upward
 
-    ball.trail.push({ x: ball.x, y: ball.y, a: 0.24, s: ball.size });
-    if (ball.trail.length > 18) ball.trail.shift();
-
-    if (ball.result === "HOME RUN!") {
-      spawnHomeRunTrail();
-      spawnHomeRunTrail();
-    }
-
-    if (ball.y > canvas.height + 60 || ball.x < -90 || ball.x > canvas.width + 90) {
-      resolveFinishedHit();
-    }
+    if (ball.z < -0.5 || ball.size < 2) resolveFinishedHit();
   }
 }
 
