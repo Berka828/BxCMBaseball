@@ -331,12 +331,22 @@ function transformPoseToBattingPosition(rawPoints) {
 
   const scaled = {};
   for (const [key, value] of Object.entries(rawPoints)) {
-    scaled[key] = value ? { x: value.x * scale, y: value.y * scale } : null;
+    if (value) {
+      // MIRROR LOGIC: Flip the X coordinate within the person's bounding box
+      const mirroredX = bounds.maxX - (value.x - bounds.minX);
+      scaled[key] = { x: mirroredX * scale, y: value.y * scale };
+    } else {
+      scaled[key] = null;
+    }
   }
 
   const scaledBounds = getPoseBounds(scaled);
   const targetFootY = canvas.height * PLAYER_FLOOR_Y;
-  const targetLeftX = canvas.width * PLAYER_TARGET_X;
+  
+  // Dynamic Positioning: Put the player on the side OPPOSITE the pitcher
+  // Righty stands on the Left side, Lefty stands on the Right side
+  const targetXRatio = (battingSide === "right") ? 0.15 : 0.75;
+  const targetLeftX = canvas.width * targetXRatio;
 
   const offsetX = targetLeftX - scaledBounds.minX;
   const offsetY = targetFootY - scaledBounds.maxY;
@@ -1078,10 +1088,16 @@ function createPitch() {
   const scale = DIFFICULTIES[difficulty].ballScale;
   const sliderPitchSpeed = parseFloat(pitchSpeedSlider?.value || String(DIFFICULTIES[difficulty].pitchSpeed));
 
+  // If Righty: Spawn Left (0.03), Move Right (Positive VX)
+  // If Lefty: Spawn Right (0.97), Move Left (Negative VX)
+  const isRighty = (battingSide === "right");
+  const spawnX = isRighty ? 0.035 : 0.965;
+  const directionMultiplier = isRighty ? 1 : -1;
+
   ball = {
-    x: canvas.width * BALL_SPAWN_X_RATIO,
+    x: canvas.width * spawnX,
     y: canvas.height * BALL_LANE_Y + (Math.random() - 0.5) * canvas.height * 0.024,
-    vx: -sliderPitchSpeed - Math.random() * 0.45,
+    vx: (sliderPitchSpeed + Math.random() * 0.45) * directionMultiplier,
     vy: (Math.random() - 0.5) * 0.08,
     size: BALL_RADIUS * scale * 1.12,
     hit: false,
@@ -1394,13 +1410,19 @@ function updateBall() {
     ball.trail.push({ x: ball.x, y: ball.y, a: 0.16, s: ball.size });
     if (ball.trail.length > 9) ball.trail.shift();
 
-    if (ball.x < canvas.width * BALL_MISS_X_RATIO) resolveMiss();
+    // Check if ball passed the batter based on direction
+    const pastBatter = (ball.vx > 0) 
+      ? (ball.x > canvas.width * 0.88)  // If moving Right, miss at right edge
+      : (ball.x < canvas.width * 0.12); // If moving Left, miss at left edge
+
+    if (pastBatter) resolveMiss();
   } else {
-   ball.vy += GRAVITY * (ball.gravityScale || 1);
-ball.vx *= (ball.airDragX || 0.992);
-ball.vy *= (ball.airDragY || 0.996);
-ball.x += ball.vx;
-ball.y += ball.vy;
+    // ... rest of the function (the "ball was hit" logic) remains the same
+    ball.vy += GRAVITY * (ball.gravityScale || 1);
+    ball.vx *= (ball.airDragX || 0.992);
+    ball.vy *= (ball.airDragY || 0.996);
+    ball.x += ball.vx;
+    ball.y += ball.vy;
 
     ball.trail.push({ x: ball.x, y: ball.y, a: 0.24, s: ball.size });
     if (ball.trail.length > 18) ball.trail.shift();
